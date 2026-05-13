@@ -1,0 +1,61 @@
+{
+  "name": "@alephantai/n8n-nodes-alephant",
+  "version": "0.1.0",
+  "description": "n8n nodes for Alephant AI Gateway, Virtual Key usage, and management automation",
+  "license": "MIT",
+  "homepage": "https://alephant.ai",
+  "author": {
+    "name": "Alephant"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alephant-ai/n8n-nodes-alephant.git"
+  },
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "alephant",
+    "ai",
+    "finops",
+    "byok"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run copy:assets",
+    "copy:assets": "node scripts/copy-assets.cjs",
+    "dev": "n8n-node dev",
+    "lint": "eslint \"{credentials,nodes,shared,test}/**/*.ts\"",
+    "test": "jest --runInBand",
+    "prepublishOnly": "npm run lint && npm run test && npm run build"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "package.json"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/AlephantVirtualKeyApi.credentials.js",
+      "dist/credentials/AlephantManagerApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/AlephantAi/AlephantAi.node.js",
+      "dist/nodes/AlephantUsage/AlephantUsage.node.js",
+      "dist/nodes/AlephantManagement/AlephantManagement.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.12.12",
+    "@n8n/node-cli": "^0.29.1",
+    "eslint": "^9.31.0",
+    "jest": "^29.7.0",
+    "n8n-workflow": "^2.16.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.35.0"
+  }
+}
