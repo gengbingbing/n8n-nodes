@@ -4,6 +4,10 @@ import {
   buildManagementRequest,
 } from '../nodes/AlephantManagement/AlephantManagement.node';
 
+function getNodeProperties(name: string) {
+  return new AlephantManagement().description.properties.filter((property) => property.name === name);
+}
+
 describe('Alephant Management node', () => {
   it('maps virtual key revoke', () => {
     expect(buildManagementRequest('virtualKey', 'revoke', { id: 'vk-id' })).toEqual({
@@ -199,6 +203,59 @@ describe('Alephant Management node', () => {
     );
   });
 
+  it.each(['page', 'pageSize', 'status'])(
+    'shows %s for agent.list and virtualKey.list without impossible AND conditions',
+    (propertyName) => {
+      const properties = getNodeProperties(propertyName);
+
+      expect(properties).toHaveLength(2);
+      expect(properties).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            displayOptions: {
+              show: {
+                resource: ['agent'],
+                agentOperation: ['list'],
+              },
+            },
+          }),
+          expect.objectContaining({
+            displayOptions: {
+              show: {
+                resource: ['virtualKey'],
+                virtualKeyOperation: ['list'],
+              },
+            },
+          }),
+        ]),
+      );
+      for (const property of properties) {
+        const show = property.displayOptions?.show || {};
+        expect(show).not.toEqual(
+          expect.objectContaining({
+            agentOperation: ['list'],
+            virtualKeyOperation: ['list'],
+          }),
+        );
+      }
+    },
+  );
+
+  it('uses body as the create body parameter name', () => {
+    expect(getNodeProperties('agentBody')).toHaveLength(0);
+    expect(getNodeProperties('virtualKeyBody')).toHaveLength(0);
+    expect(getNodeProperties('body')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          displayOptions: { show: { resource: ['agent'], agentOperation: ['create'] } },
+        }),
+        expect.objectContaining({
+          displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['create'] } },
+        }),
+      ]),
+    );
+  });
+
   it('executes management requests with manager credentials and paired items', async () => {
     const httpRequest = jest
       .fn()
@@ -267,5 +324,42 @@ describe('Alephant Management node', () => {
       qs: undefined,
       body: undefined,
     });
+  });
+
+  it('parses create bodies from the body parameter', async () => {
+    const httpRequest = jest.fn().mockResolvedValue({ id: 'agent-id' });
+    const node = new AlephantManagement();
+    const ctx = {
+      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+      getCredentials: jest.fn().mockResolvedValue({
+        pat: 'pat_test',
+        workspaceId: 'workspace-id',
+        saasBaseUrl: 'https://saas.example/',
+        analyticsBaseUrl: 'https://analytics.example/',
+      }),
+      getNodeParameter: jest.fn((name: string) => {
+        const values: Record<string, unknown> = {
+          resource: 'agent',
+          agentOperation: 'create',
+          body: '{"name":"Support Agent"}',
+        };
+
+        return values[name];
+      }),
+      helpers: { httpRequest },
+    } as unknown as IExecuteFunctions;
+
+    await expect(node.execute.call(ctx)).resolves.toEqual([
+      [{ json: { id: 'agent-id' }, pairedItem: { item: 0 } }],
+    ]);
+
+    expect(httpRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: 'https://saas.example/api/v1/agents',
+        body: { name: 'Support Agent' },
+      }),
+    );
+    expect(ctx.getNodeParameter).toHaveBeenCalledWith('body', 0, {});
   });
 });

@@ -237,7 +237,7 @@ function getManagementRequestParams(
 
   if (resource === 'agent' && operation === 'create') {
     return {
-      body: parseJsonObjectInput(ctx.getNodeParameter('agentBody', itemIndex, {}), 'Agent Body'),
+      body: parseJsonObjectInput(ctx.getNodeParameter('body', itemIndex, {}), 'Body'),
     };
   }
 
@@ -252,10 +252,7 @@ function getManagementRequestParams(
 
   if (resource === 'virtualKey' && operation === 'create') {
     return {
-      body: parseJsonObjectInput(
-        ctx.getNodeParameter('virtualKeyBody', itemIndex, {}),
-        'Virtual Key Body',
-      ),
+      body: parseJsonObjectInput(ctx.getNodeParameter('body', itemIndex, {}), 'Body'),
     };
   }
 
@@ -372,26 +369,35 @@ export class AlephantManagement implements INodeType {
         name: 'page',
         type: 'number',
         default: undefined,
-        displayOptions: {
-          show: {
-            resource: ['agent', 'virtualKey'],
-            agentOperation: ['list'],
-            virtualKeyOperation: ['list'],
-          },
-        },
+        displayOptions: { show: { resource: ['agent'], agentOperation: ['list'] } },
+      },
+      {
+        displayName: 'Page',
+        name: 'page',
+        type: 'number',
+        default: undefined,
+        displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['list'] } },
       },
       {
         displayName: 'Page Size',
         name: 'pageSize',
         type: 'number',
         default: undefined,
-        displayOptions: {
-          show: {
-            resource: ['agent', 'virtualKey'],
-            agentOperation: ['list'],
-            virtualKeyOperation: ['list'],
-          },
-        },
+        displayOptions: { show: { resource: ['agent'], agentOperation: ['list'] } },
+      },
+      {
+        displayName: 'Page Size',
+        name: 'pageSize',
+        type: 'number',
+        default: undefined,
+        displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['list'] } },
+      },
+      {
+        displayName: 'Status',
+        name: 'status',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['agent'], agentOperation: ['list'] } },
       },
       {
         displayName: 'Status',
@@ -399,11 +405,7 @@ export class AlephantManagement implements INodeType {
         type: 'string',
         default: '',
         displayOptions: {
-          show: {
-            resource: ['agent', 'virtualKey'],
-            agentOperation: ['list'],
-            virtualKeyOperation: ['list'],
-          },
+          show: { resource: ['virtualKey'], virtualKeyOperation: ['list'] },
         },
       },
       {
@@ -487,14 +489,14 @@ export class AlephantManagement implements INodeType {
       },
       {
         displayName: 'Agent Body',
-        name: 'agentBody',
+        name: 'body',
         type: 'json',
         default: '{}',
         displayOptions: { show: { resource: ['agent'], agentOperation: ['create'] } },
       },
       {
         displayName: 'Virtual Key Body',
-        name: 'virtualKeyBody',
+        name: 'body',
         type: 'json',
         default: '{}',
         displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['create'] } },
