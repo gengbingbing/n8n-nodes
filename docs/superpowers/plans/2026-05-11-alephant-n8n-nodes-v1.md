@@ -20,10 +20,10 @@ n8n/
   index.ts
   tsconfig.json
   jest.config.js
-  .eslintrc.js
+  eslint.config.js
   .prettierrc
   scripts/
-    copy-assets.js
+    copy-assets.cjs
   credentials/
     AlephantVirtualKeyApi.credentials.ts
     AlephantManagerApi.credentials.ts
@@ -42,6 +42,7 @@ n8n/
     credentials.ts
     errors.ts
     http.ts
+    json.ts
     output.ts
     types.ts
   test/
@@ -58,26 +59,51 @@ n8n/
 - `shared/constants.ts`：生产默认 base URL 和 endpoint path。
 - `shared/credentials.ts`：credential 解析与默认值合并。
 - `shared/http.ts`：统一请求助手，负责 header、base URL、错误归一化。
+- `shared/json.ts`：统一解析 n8n `json` 参数，兼容 object 和 JSON string，并拒绝非对象输入。
 - `shared/output.ts`：AI 和 API 响应归一化。
 - `shared/types.ts`：节点和测试共享的本地 DTO 类型。
 - `nodes/AlephantAi`：只做 Chat Completion。
 - `nodes/AlephantUsage`：只做当前 VK 的 cockpit analytics。
-- `nodes/AlephantManagement`：只做 PAT workspace 管理和 analytics。
+- `nodes/AlephantManagement`：只做 PAT workspace 管理和已存在的 workspace / agent / member / department analytics；PAT 任意 VK 维度 analytics 等后端契约补齐后再追加。
+
+## 任务 0：确认生产 base URL
+
+**目标：** 在写入 `shared/constants.ts` 和 credential 默认值前，先确认当前产品生产域名，避免后续测试和 README 锁定错误默认值。
+
+- [ ] **步骤 1：确认默认 API / Gateway host**
+
+结合当前公开 API reference、Gateway 文档和产品配置确认：
+
+```text
+DEFAULT_GATEWAY_BASE_URL
+DEFAULT_SAAS_BASE_URL
+DEFAULT_ANALYTICS_BASE_URL
+```
+
+当前已知信息：
+
+- 公开 API Reference 位于 `https://developers.alephant.io/api-reference`。
+- AI Gateway host 是 `https://ai.alephant.io/v1`。
+- SaaS 后端 host 是 `https://alephant.io`。
+- 统计分析 host 是 `https://analytics.alephant.io`。
+- 旧 MCP 示例曾使用 `https://api.alephant.ai`。
+
+执行本计划时必须在这里选定默认值。如果产品最终确认的域名不同于下面示例代码，先同步更新 `shared/constants.ts`、credential 测试、README 和 smoke test，再继续任务 1。
 
 ## 任务 1：初始化 n8n community package
 
 **文件：**
+
 - 新建：`package.json`
 - 新建：`index.ts`
 - 新建：`tsconfig.json`
 - 新建：`jest.config.js`
-- 新建：`.eslintrc.js`
+- 新建：`eslint.config.js`
 - 新建：`.prettierrc`
-- 新建：`scripts/copy-assets.js`
+- 新建：`scripts/copy-assets.cjs`
 - 新建：`nodes/AlephantAi/alephant.svg`，内容复制自 `Alephantinterface/public/logo.svg`
 - 新建：`nodes/AlephantUsage/alephant.svg`，内容复制自 `Alephantinterface/public/logo.svg`
 - 新建：`nodes/AlephantManagement/alephant.svg`，内容复制自 `Alephantinterface/public/logo.svg`
-
 - [ ] **步骤 1：确认当前目录是 n8n 独立仓库**
 
 运行：
@@ -129,16 +155,17 @@ mkdir -p credentials shared test docs scripts nodes/AlephantAi nodes/AlephantUsa
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run copy:assets",
-    "copy:assets": "node scripts/copy-assets.js",
+    "copy:assets": "node scripts/copy-assets.cjs",
+    "dev": "n8n-node dev",
     "lint": "eslint \"{credentials,nodes,shared,test}/**/*.ts\"",
     "test": "jest --runInBand",
     "prepublishOnly": "npm run lint && npm run test && npm run build"
   },
   "files": [
     "dist",
-    "credentials",
-    "nodes",
-    "shared"
+    "docs",
+    "README.md",
+    "package.json"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
@@ -155,11 +182,11 @@ mkdir -p credentials shared test docs scripts nodes/AlephantAi nodes/AlephantUsa
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^20.12.12",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.0",
+    "typescript-eslint": "^8.35.0",
+    "@n8n/node-cli": "^0.29.1",
+    "eslint": "^9.31.0",
     "jest": "^29.7.0",
-    "n8n-workflow": "^1.82.0",
+    "n8n-workflow": "^2.16.0",
     "ts-jest": "^29.2.5",
     "typescript": "^5.6.3"
   }
@@ -206,23 +233,24 @@ module.exports = {
 };
 ```
 
-创建 `.eslintrc.js`：
+创建 `eslint.config.js`：
 
 ```js
-module.exports = {
-  root: true,
-  parser: '@typescript-eslint/parser',
-  plugins: ['@typescript-eslint'],
-  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
-  env: {
-    node: true,
-    jest: true,
-    es2021: true,
+const tseslint = require('typescript-eslint');
+
+module.exports = [
+  {
+    ignores: ['dist/**', 'node_modules/**'],
   },
-  rules: {
-    '@typescript-eslint/no-explicit-any': 'off',
+  ...tseslint.configs.recommended,
+  {
+    files: ['**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-undef': 'off',
+    },
   },
-};
+];
 ```
 
 创建 `.prettierrc`：
@@ -235,7 +263,7 @@ module.exports = {
 }
 ```
 
-创建 `scripts/copy-assets.js`：
+创建 `scripts/copy-assets.cjs`：
 
 ```js
 const fs = require('fs');
@@ -278,30 +306,32 @@ npm install
 npm run build
 ```
 
-预期：失败，原因是 credentials 和 node 文件还没创建。这个失败用于确认 TypeScript build 配置已经生效。
+预期：通过，确认 TypeScript build 和 SVG 复制脚本可运行。此时 n8n metadata 指向的 credentials / node JS 文件还未全部生成，后续任务会补齐。
 
 - [ ] **步骤 6：提交脚手架**
 
 ```bash
-git add package.json package-lock.json index.ts tsconfig.json jest.config.js .eslintrc.js .prettierrc scripts/copy-assets.js nodes/AlephantAi/alephant.svg nodes/AlephantUsage/alephant.svg nodes/AlephantManagement/alephant.svg
+git add package.json package-lock.json index.ts tsconfig.json jest.config.js eslint.config.js .prettierrc scripts/copy-assets.cjs nodes/AlephantAi/alephant.svg nodes/AlephantUsage/alephant.svg nodes/AlephantManagement/alephant.svg
 git commit -m "chore(n8n): scaffold Alephant node package"
 ```
 
 ## 任务 2：共享常量、类型、HTTP 和输出助手
 
 **文件：**
+
 - 新建：`shared/constants.ts`
 - 新建：`shared/types.ts`
 - 新建：`shared/errors.ts`
 - 新建：`shared/http.ts`
+- 新建：`shared/json.ts`
 - 新建：`shared/output.ts`
 - 测试：`test/output.test.ts`
-
 - [ ] **步骤 1：先写输出归一化测试**
 
 创建 `test/output.test.ts`：
 
 ```ts
+import { parseJsonObjectInput } from '../shared/json';
 import { normalizeChatCompletion, trimTrailingSlash } from '../shared/output';
 
 describe('shared output helpers', () => {
@@ -329,7 +359,19 @@ describe('shared output helpers', () => {
   });
 
   it('trims trailing slashes from base URLs', () => {
-    expect(trimTrailingSlash('https://api.alephant.ai///')).toBe('https://api.alephant.ai');
+    expect(trimTrailingSlash('https://analytics.alephant.io///')).toBe('https://analytics.alephant.io');
+  });
+
+  it('parses JSON object parameters from strings and objects', () => {
+    expect(parseJsonObjectInput('{"seed":7}', 'Additional Options')).toEqual({ seed: 7 });
+    expect(parseJsonObjectInput({ workflow: 'wf_1' }, 'Metadata')).toEqual({ workflow: 'wf_1' });
+    expect(parseJsonObjectInput('', 'Metadata')).toEqual({});
+    expect(parseJsonObjectInput(undefined, 'Metadata')).toEqual({});
+  });
+
+  it('rejects JSON parameters that are not objects', () => {
+    expect(() => parseJsonObjectInput('[1,2]', 'Metadata')).toThrow('Metadata must be a JSON object');
+    expect(() => parseJsonObjectInput('{bad json}', 'Metadata')).toThrow('Metadata must be valid JSON');
   });
 });
 ```
@@ -349,8 +391,9 @@ npm test -- output.test.ts
 创建 `shared/constants.ts`：
 
 ```ts
-export const DEFAULT_GATEWAY_BASE_URL = 'https://gateway.alephant.ai/v1';
-export const DEFAULT_API_BASE_URL = 'https://api.alephant.ai';
+export const DEFAULT_GATEWAY_BASE_URL = 'https://ai.alephant.io/v1';
+export const DEFAULT_SAAS_BASE_URL = 'https://alephant.io';
+export const DEFAULT_ANALYTICS_BASE_URL = 'https://analytics.alephant.io';
 
 export const ENDPOINTS = {
   chatCompletions: '/chat/completions',
@@ -377,13 +420,14 @@ export type InputMode = 'prompt' | 'messages';
 export interface AlephantVirtualKeyCredentials {
   virtualKey: string;
   gatewayBaseUrl?: string;
-  apiBaseUrl?: string;
+  analyticsBaseUrl?: string;
 }
 
 export interface AlephantManagerCredentials {
   pat: string;
   workspaceId: string;
-  apiBaseUrl?: string;
+  saasBaseUrl?: string;
+  analyticsBaseUrl?: string;
 }
 
 export interface ChatMessage {
@@ -428,7 +472,7 @@ export function toNodeApiError(
 创建 `shared/http.ts`：
 
 ```ts
-import type { IExecuteFunctions, IHttpRequestMethods, IRequestOptions } from 'n8n-workflow';
+import type { IExecuteFunctions, IHttpRequestMethods, IHttpRequestOptions } from 'n8n-workflow';
 import { toNodeApiError } from './errors';
 import { trimTrailingSlash } from './output';
 
@@ -447,7 +491,7 @@ export async function alephantRequest<T>(
   options: AlephantRequestOptions,
 ): Promise<T> {
   const url = `${trimTrailingSlash(options.baseUrl)}${options.path}`;
-  const request: IRequestOptions = {
+  const request: IHttpRequestOptions = {
     method: options.method,
     url,
     json: true,
@@ -461,10 +505,34 @@ export async function alephantRequest<T>(
   };
 
   try {
-    return (await ctx.helpers.request(request)) as T;
+    return (await ctx.helpers.httpRequest(request)) as T;
   } catch (error) {
     throw toNodeApiError(ctx, error, options.method, url);
   }
+}
+```
+
+创建 `shared/json.ts`：
+
+```ts
+export function parseJsonObjectInput(value: unknown, fieldName: string): Record<string, unknown> {
+  if (value === undefined || value === null || value === '') {
+    return {};
+  }
+
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new Error(`${fieldName} must be valid JSON`);
+    }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`${fieldName} must be a JSON object`);
+  }
+
+  return parsed as Record<string, unknown>;
 }
 ```
 
@@ -515,17 +583,21 @@ git commit -m "feat(n8n): add Alephant shared helpers"
 ## 任务 3：Credentials
 
 **文件：**
+
 - 新建：`credentials/AlephantVirtualKeyApi.credentials.ts`
 - 新建：`credentials/AlephantManagerApi.credentials.ts`
 - 新建：`shared/credentials.ts`
 - 测试：`test/credentials.test.ts`
-
 - [ ] **步骤 1：先写 credential helper 测试**
 
 创建 `test/credentials.test.ts`：
 
 ```ts
-import { DEFAULT_API_BASE_URL, DEFAULT_GATEWAY_BASE_URL } from '../shared/constants';
+import {
+  DEFAULT_ANALYTICS_BASE_URL,
+  DEFAULT_GATEWAY_BASE_URL,
+  DEFAULT_SAAS_BASE_URL,
+} from '../shared/constants';
 import { resolveManagerCredentials, resolveVirtualKeyCredentials } from '../shared/credentials';
 
 describe('credential helpers', () => {
@@ -533,22 +605,23 @@ describe('credential helpers', () => {
     const resolved = resolveVirtualKeyCredentials({ virtualKey: 'vk-test' });
     expect(resolved.virtualKey).toBe('vk-test');
     expect(resolved.gatewayBaseUrl).toBe(DEFAULT_GATEWAY_BASE_URL);
-    expect(resolved.apiBaseUrl).toBe(DEFAULT_API_BASE_URL);
+    expect(resolved.analyticsBaseUrl).toBe(DEFAULT_ANALYTICS_BASE_URL);
   });
 
   it('allows virtual key base URL overrides', () => {
     const resolved = resolveVirtualKeyCredentials({
       virtualKey: 'vk-test',
       gatewayBaseUrl: 'http://localhost:8080/v1/',
-      apiBaseUrl: 'http://localhost:3000/',
+      analyticsBaseUrl: 'http://localhost:3001/',
     });
     expect(resolved.gatewayBaseUrl).toBe('http://localhost:8080/v1');
-    expect(resolved.apiBaseUrl).toBe('http://localhost:3000');
+    expect(resolved.analyticsBaseUrl).toBe('http://localhost:3001');
   });
 
-  it('uses default API base URL for manager credentials', () => {
+  it('uses default SaaS and analytics base URLs for manager credentials', () => {
     const resolved = resolveManagerCredentials({ pat: 'pat_test', workspaceId: 'ws_123' });
-    expect(resolved.apiBaseUrl).toBe(DEFAULT_API_BASE_URL);
+    expect(resolved.saasBaseUrl).toBe(DEFAULT_SAAS_BASE_URL);
+    expect(resolved.analyticsBaseUrl).toBe(DEFAULT_ANALYTICS_BASE_URL);
   });
 });
 ```
@@ -568,7 +641,11 @@ npm test -- credentials.test.ts
 创建 `shared/credentials.ts`：
 
 ```ts
-import { DEFAULT_API_BASE_URL, DEFAULT_GATEWAY_BASE_URL } from './constants';
+import {
+  DEFAULT_ANALYTICS_BASE_URL,
+  DEFAULT_GATEWAY_BASE_URL,
+  DEFAULT_SAAS_BASE_URL,
+} from './constants';
 import { trimTrailingSlash } from './output';
 import type { AlephantManagerCredentials, AlephantVirtualKeyCredentials } from './types';
 
@@ -578,7 +655,7 @@ export function resolveVirtualKeyCredentials(
   return {
     virtualKey: raw.virtualKey,
     gatewayBaseUrl: trimTrailingSlash(raw.gatewayBaseUrl || DEFAULT_GATEWAY_BASE_URL),
-    apiBaseUrl: trimTrailingSlash(raw.apiBaseUrl || DEFAULT_API_BASE_URL),
+    analyticsBaseUrl: trimTrailingSlash(raw.analyticsBaseUrl || DEFAULT_ANALYTICS_BASE_URL),
   };
 }
 
@@ -588,7 +665,8 @@ export function resolveManagerCredentials(
   return {
     pat: raw.pat,
     workspaceId: raw.workspaceId,
-    apiBaseUrl: trimTrailingSlash(raw.apiBaseUrl || DEFAULT_API_BASE_URL),
+    saasBaseUrl: trimTrailingSlash(raw.saasBaseUrl || DEFAULT_SAAS_BASE_URL),
+    analyticsBaseUrl: trimTrailingSlash(raw.analyticsBaseUrl || DEFAULT_ANALYTICS_BASE_URL),
   };
 }
 ```
@@ -597,7 +675,7 @@ export function resolveManagerCredentials(
 
 ```ts
 import type { ICredentialType, INodeProperties } from 'n8n-workflow';
-import { DEFAULT_API_BASE_URL, DEFAULT_GATEWAY_BASE_URL } from '../shared/constants';
+import { DEFAULT_ANALYTICS_BASE_URL, DEFAULT_GATEWAY_BASE_URL } from '../shared/constants';
 
 export class AlephantVirtualKeyApi implements ICredentialType {
   name = 'alephantVirtualKeyApi';
@@ -623,12 +701,12 @@ export class AlephantVirtualKeyApi implements ICredentialType {
       description: 'Optional. Override for staging, local, or self-hosted Gateway testing.',
     },
     {
-      displayName: 'API Base URL',
-      name: 'apiBaseUrl',
+      displayName: 'Analytics Base URL',
+      name: 'analyticsBaseUrl',
       type: 'string',
-      default: DEFAULT_API_BASE_URL,
+      default: DEFAULT_ANALYTICS_BASE_URL,
       required: false,
-      description: 'Optional. Override for staging, local, or self-hosted SaaS API testing.',
+      description: 'Optional. Override for staging, local, or self-hosted analytics API testing.',
     },
   ];
 }
@@ -638,7 +716,7 @@ export class AlephantVirtualKeyApi implements ICredentialType {
 
 ```ts
 import type { ICredentialType, INodeProperties } from 'n8n-workflow';
-import { DEFAULT_API_BASE_URL } from '../shared/constants';
+import { DEFAULT_ANALYTICS_BASE_URL, DEFAULT_SAAS_BASE_URL } from '../shared/constants';
 
 export class AlephantManagerApi implements ICredentialType {
   name = 'alephantManagerApi';
@@ -653,7 +731,7 @@ export class AlephantManagerApi implements ICredentialType {
       typeOptions: { password: true },
       default: '',
       required: true,
-      description: 'Alephant PAT for workspace management automation',
+      description: 'Alephant PAT for workspace management automation. Read scope is enough for list and analytics; write scope is required for create, revoke, rotate, or update operations.',
     },
     {
       displayName: 'Workspace ID',
@@ -664,12 +742,20 @@ export class AlephantManagerApi implements ICredentialType {
       description: 'Workspace UUID used as X-Workspace-Id',
     },
     {
-      displayName: 'API Base URL',
-      name: 'apiBaseUrl',
+      displayName: 'SaaS Base URL',
+      name: 'saasBaseUrl',
       type: 'string',
-      default: DEFAULT_API_BASE_URL,
+      default: DEFAULT_SAAS_BASE_URL,
       required: false,
       description: 'Optional. Override for staging, local, or self-hosted SaaS API testing.',
+    },
+    {
+      displayName: 'Analytics Base URL',
+      name: 'analyticsBaseUrl',
+      type: 'string',
+      default: DEFAULT_ANALYTICS_BASE_URL,
+      required: false,
+      description: 'Optional. Override for staging, local, or self-hosted analytics API testing.',
     },
   ];
 }
@@ -684,7 +770,7 @@ npm test -- credentials.test.ts
 npm run build
 ```
 
-预期：credential 测试通过；构建仍会失败，因为三个 node 文件尚未创建。
+预期：credential 测试通过；构建通过，但 n8n metadata 指向的 node JS 文件要到三个节点任务完成后才补齐。
 
 - [ ] **步骤 5：提交 credentials**
 
@@ -696,15 +782,15 @@ git commit -m "feat(n8n): add Alephant credentials"
 ## 任务 4：Alephant AI 节点
 
 **文件：**
+
 - 新建：`nodes/AlephantAi/AlephantAi.node.ts`
 - 测试：`test/ai-node.test.ts`
-
 - [ ] **步骤 1：先写 payload 构造测试**
 
 创建 `test/ai-node.test.ts`：
 
 ```ts
-import { buildChatCompletionBody } from '../nodes/AlephantAi/AlephantAi.node';
+import { buildChatCompletionBody, parseMessagesInput } from '../nodes/AlephantAi/AlephantAi.node';
 
 describe('Alephant AI node', () => {
   it('builds a prompt-mode chat completion body', () => {
@@ -737,6 +823,41 @@ describe('Alephant AI node', () => {
     expect(body.messages).toHaveLength(2);
     expect(body.seed).toBe(7);
   });
+
+  it('does not let additional options override core request fields', () => {
+    const body = buildChatCompletionBody({
+      model: 'gpt-4o-mini',
+      inputMode: 'prompt',
+      prompt: 'Hi',
+      additionalOptions: {
+        model: 'override',
+        messages: [],
+        temperature: 0,
+        seed: 7,
+      },
+    });
+
+    expect(body.model).toBe('gpt-4o-mini');
+    expect(body.messages).toEqual([{ role: 'user', content: 'Hi' }]);
+    expect(body.temperature).toBeUndefined();
+    expect(body.seed).toBe(7);
+  });
+
+  it('parses messages from JSON string input', () => {
+    expect(parseMessagesInput('[{"role":"user","content":"Hi"}]')).toEqual([
+      { role: 'user', content: 'Hi' },
+    ]);
+  });
+
+  it('rejects non-array messages input', () => {
+    expect(() => parseMessagesInput('{"role":"user","content":"Hi"}')).toThrow(
+      'Messages must be a JSON array',
+    );
+  });
+
+  it('rejects invalid messages JSON with a stable message', () => {
+    expect(() => parseMessagesInput('{bad json}')).toThrow('Messages must be valid JSON');
+  });
 });
 ```
 
@@ -761,10 +882,11 @@ import type {
   INodeType,
   INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeOperationError } from 'n8n-workflow';
+import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 import { ENDPOINTS } from '../../shared/constants';
 import { resolveVirtualKeyCredentials } from '../../shared/credentials';
 import { alephantRequest } from '../../shared/http';
+import { parseJsonObjectInput } from '../../shared/json';
 import { normalizeChatCompletion } from '../../shared/output';
 import type { AlephantVirtualKeyCredentials, ChatMessage, InputMode } from '../../shared/types';
 
@@ -780,6 +902,15 @@ export interface ChatCompletionInput {
   additionalOptions?: Record<string, unknown>;
 }
 
+const CORE_CHAT_COMPLETION_FIELDS = new Set([
+  'model',
+  'messages',
+  'temperature',
+  'max_tokens',
+  'response_format',
+  'metadata',
+]);
+
 export function buildChatCompletionBody(input: ChatCompletionInput): Record<string, unknown> {
   const messages =
     input.inputMode === 'messages'
@@ -792,7 +923,7 @@ export function buildChatCompletionBody(input: ChatCompletionInput): Record<stri
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(input.maxTokens !== undefined ? { max_tokens: input.maxTokens } : {}),
     ...(input.metadata ? { metadata: input.metadata } : {}),
-    ...(input.additionalOptions || {}),
+    ...filterAdditionalOptions(input.additionalOptions || {}),
   };
 
   if (input.responseFormat && input.responseFormat !== 'text') {
@@ -800,6 +931,37 @@ export function buildChatCompletionBody(input: ChatCompletionInput): Record<stri
   }
 
   return body;
+}
+
+function filterAdditionalOptions(options: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(options).filter(([key]) => !CORE_CHAT_COMPLETION_FIELDS.has(key)),
+  );
+}
+
+export function parseMessagesInput(value: unknown): ChatMessage[] {
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new Error('Messages must be valid JSON');
+    }
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error('Messages must be a JSON array');
+  }
+  for (const message of parsed) {
+    if (
+      typeof message !== 'object' ||
+      message === null ||
+      typeof (message as ChatMessage).role !== 'string' ||
+      typeof (message as ChatMessage).content !== 'string'
+    ) {
+      throw new Error('Each message must include string role and content fields');
+    }
+  }
+  return parsed as ChatMessage[];
 }
 
 export class AlephantAi implements INodeType {
@@ -812,8 +974,8 @@ export class AlephantAi implements INodeType {
     subtitle: '={{$parameter["operation"]}}',
     description: 'Call Alephant AI Gateway with a Virtual Key',
     defaults: { name: 'Alephant AI' },
-    inputs: ['main'],
-    outputs: ['main'],
+    inputs: [NodeConnectionType.Main],
+    outputs: [NodeConnectionType.Main],
     credentials: [{ name: 'alephantVirtualKeyApi', required: true }],
     properties: [
       {
@@ -876,18 +1038,34 @@ export class AlephantAi implements INodeType {
 
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
       const inputMode = this.getNodeParameter('inputMode', itemIndex) as InputMode;
-      const rawMessages = this.getNodeParameter('messages', itemIndex, []) as ChatMessage[];
-      const body = buildChatCompletionBody({
-        model: this.getNodeParameter('model', itemIndex) as string,
-        inputMode,
-        prompt: this.getNodeParameter('prompt', itemIndex, '') as string,
-        messages: rawMessages,
-        temperature: this.getNodeParameter('temperature', itemIndex, undefined) as number | undefined,
-        maxTokens: this.getNodeParameter('maxTokens', itemIndex, undefined) as number | undefined,
-        responseFormat: this.getNodeParameter('responseFormat', itemIndex, 'text') as string,
-        metadata: this.getNodeParameter('metadata', itemIndex, {}) as Record<string, unknown>,
-        additionalOptions: this.getNodeParameter('additionalOptions', itemIndex, {}) as Record<string, unknown>,
-      });
+      let body: Record<string, unknown>;
+
+      try {
+        const rawMessages =
+          inputMode === 'messages'
+            ? parseMessagesInput(this.getNodeParameter('messages', itemIndex, []))
+            : [];
+        body = buildChatCompletionBody({
+          model: this.getNodeParameter('model', itemIndex) as string,
+          inputMode,
+          prompt: this.getNodeParameter('prompt', itemIndex, '') as string,
+          messages: rawMessages,
+          temperature: this.getNodeParameter('temperature', itemIndex, undefined) as number | undefined,
+          maxTokens: this.getNodeParameter('maxTokens', itemIndex, undefined) as number | undefined,
+          responseFormat: this.getNodeParameter('responseFormat', itemIndex, 'text') as string,
+          metadata: parseJsonObjectInput(this.getNodeParameter('metadata', itemIndex, {}), 'Metadata'),
+          additionalOptions: parseJsonObjectInput(
+            this.getNodeParameter('additionalOptions', itemIndex, {}),
+            'Additional Options',
+          ),
+        });
+      } catch (error) {
+        throw new NodeOperationError(
+          this.getNode(),
+          error instanceof Error ? error.message : 'Invalid Alephant AI input',
+          { itemIndex },
+        );
+      }
 
       if (!Array.isArray(body.messages) || body.messages.length === 0) {
         throw new NodeOperationError(this.getNode(), 'At least one message is required', { itemIndex });
@@ -929,9 +1107,9 @@ git commit -m "feat(n8n): add Alephant AI node"
 ## 任务 5：Alephant Usage 节点
 
 **文件：**
+
 - 新建：`nodes/AlephantUsage/AlephantUsage.node.ts`
 - 测试：`test/usage-node.test.ts`
-
 - [ ] **步骤 1：先写 operation mapping 测试**
 
 创建 `test/usage-node.test.ts`：
@@ -977,6 +1155,7 @@ import type {
   INodeType,
   INodeTypeDescription,
 } from 'n8n-workflow';
+import { NodeConnectionType } from 'n8n-workflow';
 import { ENDPOINTS } from '../../shared/constants';
 import { resolveVirtualKeyCredentials } from '../../shared/credentials';
 import { alephantRequest } from '../../shared/http';
@@ -1020,8 +1199,8 @@ export class AlephantUsage implements INodeType {
     subtitle: '={{$parameter["operation"]}}',
     description: 'Read usage and budget information for the current Alephant Virtual Key',
     defaults: { name: 'Alephant Usage' },
-    inputs: ['main'],
-    outputs: ['main'],
+    inputs: [NodeConnectionType.Main],
+    outputs: [NodeConnectionType.Main],
     credentials: [{ name: 'alephantVirtualKeyApi', required: true }],
     properties: [
       {
@@ -1086,7 +1265,7 @@ export class AlephantUsage implements INodeType {
 
       const data = await alephantRequest<Record<string, unknown>>(this, {
         method: 'GET',
-        baseUrl: credentials.apiBaseUrl,
+        baseUrl: credentials.analyticsBaseUrl,
         path: request.path,
         token: credentials.virtualKey,
         qs: request.qs,
@@ -1120,9 +1299,9 @@ git commit -m "feat(n8n): add Alephant Usage node"
 ## 任务 6：Alephant Management 节点
 
 **文件：**
+
 - 新建：`nodes/AlephantManagement/AlephantManagement.node.ts`
 - 测试：`test/management-node.test.ts`
-
 - [ ] **步骤 1：先写 operation mapping 测试**
 
 创建 `test/management-node.test.ts`：
@@ -1134,6 +1313,7 @@ describe('Alephant Management node', () => {
   it('maps virtual key revoke', () => {
     expect(buildManagementRequest('virtualKey', 'revoke', { id: 'vk-id' })).toEqual({
       method: 'POST',
+      host: 'saas',
       path: '/api/v1/virtual-keys/vk-id/revoke',
     });
   });
@@ -1141,16 +1321,48 @@ describe('Alephant Management node', () => {
   it('maps workspace usage history', () => {
     expect(buildManagementRequest('workspaceUsage', 'history', { dateFrom: '2026-05-01', dateTo: '2026-05-11' })).toEqual({
       method: 'GET',
+      host: 'analytics',
       path: '/api/v1/analytics/usage',
       qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11' },
     });
   });
 
-  it('maps virtual key usage summary to proposed management endpoint', () => {
-    expect(buildManagementRequest('virtualKeyUsage', 'summary', { id: 'vk-id' })).toEqual({
+  it('maps workspace usage history with agent filter', () => {
+    expect(buildManagementRequest('workspaceUsage', 'history', {
+      dateFrom: '2026-05-01',
+      dateTo: '2026-05-11',
+      agentId: 'agent-id',
+    })).toEqual({
       method: 'GET',
-      path: '/api/v1/virtual-keys/vk-id/analytics/summary',
+      host: 'analytics',
+      path: '/api/v1/analytics/usage',
+      qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11', agentId: 'agent-id' },
     });
+  });
+
+  it('rejects workspace usage history with multiple scoped filters', () => {
+    expect(() => buildManagementRequest('workspaceUsage', 'history', {
+      agentId: 'agent-id',
+      memberId: 'member-id',
+    })).toThrow('Choose only one analytics scope filter');
+  });
+
+  it('requires an id for virtual key revoke', () => {
+    expect(() => buildManagementRequest('virtualKey', 'revoke', { id: '' })).toThrow(
+      'Virtual Key ID is required',
+    );
+  });
+
+  it('requires a non-empty body for agent create', () => {
+    expect(() => buildManagementRequest('agent', 'create', { body: {} })).toThrow(
+      'Body must not be empty',
+    );
+  });
+
+  it('requires a non-empty body for virtual key create', () => {
+    expect(() => buildManagementRequest('virtualKey', 'create', { body: {} })).toThrow(
+      'Body must not be empty',
+    );
   });
 });
 ```
@@ -1177,16 +1389,19 @@ import type {
   INodeType,
   INodeTypeDescription,
 } from 'n8n-workflow';
+import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 import { ENDPOINTS } from '../../shared/constants';
 import { resolveManagerCredentials } from '../../shared/credentials';
 import { alephantRequest } from '../../shared/http';
+import { parseJsonObjectInput } from '../../shared/json';
 import type { AlephantManagerCredentials } from '../../shared/types';
 
-export type ManagementResource = 'agent' | 'virtualKey' | 'models' | 'workspaceUsage' | 'virtualKeyUsage';
+export type ManagementResource = 'agent' | 'virtualKey' | 'models' | 'workspaceUsage';
 export type ManagementOperation = 'list' | 'create' | 'revoke' | 'summary' | 'history' | 'costByModel';
 
 export interface ManagementRequest {
   method: IHttpRequestMethods;
+  host: 'saas' | 'analytics';
   path: string;
   qs?: Record<string, unknown>;
   body?: Record<string, unknown>;
@@ -1198,47 +1413,65 @@ export function buildManagementRequest(
   params: Record<string, unknown>,
 ): ManagementRequest {
   if (resource === 'agent' && operation === 'list') {
-    return { method: 'GET', path: ENDPOINTS.agents, qs: pick(params, ['page', 'pageSize', 'status', 'departmentId', 'environment', 'search']) };
+    return { method: 'GET', host: 'saas', path: ENDPOINTS.agents, qs: pick(params, ['page', 'pageSize', 'status', 'departmentId', 'environment', 'search']) };
   }
   if (resource === 'agent' && operation === 'create') {
-    return { method: 'POST', path: ENDPOINTS.agents, body: params.body as Record<string, unknown> };
+    requireNonEmptyObject(params.body, 'Body');
+    return { method: 'POST', host: 'saas', path: ENDPOINTS.agents, body: params.body as Record<string, unknown> };
   }
   if (resource === 'virtualKey' && operation === 'list') {
-    return { method: 'GET', path: ENDPOINTS.virtualKeys, qs: pick(params, ['page', 'pageSize', 'status', 'entityType']) };
+    return { method: 'GET', host: 'saas', path: ENDPOINTS.virtualKeys, qs: pick(params, ['page', 'pageSize', 'status', 'entityType']) };
   }
   if (resource === 'virtualKey' && operation === 'create') {
-    return { method: 'POST', path: ENDPOINTS.virtualKeys, body: params.body as Record<string, unknown> };
+    requireNonEmptyObject(params.body, 'Body');
+    return { method: 'POST', host: 'saas', path: ENDPOINTS.virtualKeys, body: params.body as Record<string, unknown> };
   }
   if (resource === 'virtualKey' && operation === 'revoke') {
-    return { method: 'POST', path: `${ENDPOINTS.virtualKeys}/${params.id}/revoke` };
+    requireString(params.id, 'Virtual Key ID');
+    return { method: 'POST', host: 'saas', path: `${ENDPOINTS.virtualKeys}/${params.id}/revoke` };
   }
   if (resource === 'models' && operation === 'list') {
-    return { method: 'GET', path: ENDPOINTS.models };
+    return { method: 'GET', host: 'saas', path: ENDPOINTS.models };
   }
   if (resource === 'workspaceUsage' && operation === 'summary') {
-    return { method: 'GET', path: ENDPOINTS.analyticsOverview };
+    return { method: 'GET', host: 'analytics', path: ENDPOINTS.analyticsOverview };
   }
   if (resource === 'workspaceUsage' && operation === 'history') {
-    return { method: 'GET', path: ENDPOINTS.analyticsUsage, qs: pick(params, ['dateFrom', 'dateTo', 'agentId', 'memberId', 'departmentId']) };
+    validateSingleAnalyticsScope(params);
+    return { method: 'GET', host: 'analytics', path: ENDPOINTS.analyticsUsage, qs: pick(params, ['dateFrom', 'dateTo', 'agentId', 'memberId', 'departmentId']) };
   }
   if (resource === 'workspaceUsage' && operation === 'costByModel') {
-    return { method: 'GET', path: ENDPOINTS.analyticsModels, qs: pick(params, ['dateFrom', 'dateTo']) };
+    return { method: 'GET', host: 'analytics', path: ENDPOINTS.analyticsModels, qs: pick(params, ['dateFrom', 'dateTo']) };
   }
-  if (resource === 'virtualKeyUsage' && operation === 'summary') {
-    return { method: 'GET', path: `${ENDPOINTS.virtualKeys}/${params.id}/analytics/summary` };
-  }
-  if (resource === 'virtualKeyUsage' && operation === 'history') {
-    return { method: 'GET', path: `${ENDPOINTS.virtualKeys}/${params.id}/analytics/history`, qs: pick(params, ['dateFrom', 'dateTo']) };
-  }
-  if (resource === 'virtualKeyUsage' && operation === 'costByModel') {
-    return { method: 'GET', path: `${ENDPOINTS.virtualKeys}/${params.id}/analytics/models`, qs: pick(params, ['dateFrom', 'dateTo']) };
-  }
-
   throw new Error(`Unsupported Alephant Management operation: ${resource}.${operation}`);
 }
 
 function pick(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   return Object.fromEntries(keys.filter((key) => source[key] !== undefined && source[key] !== '').map((key) => [key, source[key]]));
+}
+
+function requireString(value: unknown, fieldName: string): void {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${fieldName} is required`);
+  }
+}
+
+function requireNonEmptyObject(value: unknown, fieldName: string): void {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    Object.keys(value as Record<string, unknown>).length === 0
+  ) {
+    throw new Error(`${fieldName} must not be empty`);
+  }
+}
+
+function validateSingleAnalyticsScope(params: Record<string, unknown>): void {
+  const filters = ['agentId', 'memberId', 'departmentId'].filter((key) => params[key] !== undefined && params[key] !== '');
+  if (filters.length > 1) {
+    throw new Error('Choose only one analytics scope filter');
+  }
 }
 ```
 
@@ -1254,11 +1487,11 @@ export class AlephantManagement implements INodeType {
     icon: 'file:alephant.svg',
     group: ['transform'],
     version: 1,
-    subtitle: '={{$parameter["resource"] + ": " + $parameter["operation"]}}',
-    description: 'Manage Alephant agents, virtual keys, models, and analytics with PAT credentials',
+    subtitle: '={{$parameter["resource"]}}',
+    description: 'Manage Alephant agents, virtual keys, models, and workspace analytics with PAT credentials',
     defaults: { name: 'Alephant Management' },
-    inputs: ['main'],
-    outputs: ['main'],
+    inputs: [NodeConnectionType.Main],
+    outputs: [NodeConnectionType.Main],
     credentials: [{ name: 'alephantManagerApi', required: true }],
     properties: [
       {
@@ -1271,36 +1504,181 @@ export class AlephantManagement implements INodeType {
           { name: 'Agent', value: 'agent' },
           { name: 'Models', value: 'models' },
           { name: 'Virtual Key', value: 'virtualKey' },
-          { name: 'Virtual Key Usage', value: 'virtualKeyUsage' },
           { name: 'Workspace Usage', value: 'workspaceUsage' },
         ],
       },
       {
-        displayName: 'Operation',
-        name: 'operation',
+        displayName: 'Agent Operation',
+        name: 'agentOperation',
         type: 'options',
         noDataExpression: true,
         default: 'list',
+        displayOptions: { show: { resource: ['agent'] } },
+        options: [
+          { name: 'List', value: 'list' },
+          { name: 'Create', value: 'create' },
+        ],
+      },
+      {
+        displayName: 'Virtual Key Operation',
+        name: 'virtualKeyOperation',
+        type: 'options',
+        noDataExpression: true,
+        default: 'list',
+        displayOptions: { show: { resource: ['virtualKey'] } },
         options: [
           { name: 'List', value: 'list' },
           { name: 'Create', value: 'create' },
           { name: 'Revoke', value: 'revoke' },
+        ],
+      },
+      {
+        displayName: 'Models Operation',
+        name: 'modelsOperation',
+        type: 'options',
+        noDataExpression: true,
+        default: 'list',
+        displayOptions: { show: { resource: ['models'] } },
+        options: [{ name: 'List', value: 'list' }],
+      },
+      {
+        displayName: 'Workspace Usage Operation',
+        name: 'workspaceUsageOperation',
+        type: 'options',
+        noDataExpression: true,
+        default: 'summary',
+        displayOptions: { show: { resource: ['workspaceUsage'] } },
+        options: [
           { name: 'Get Summary', value: 'summary' },
           { name: 'Get History', value: 'history' },
           { name: 'Get Cost By Model', value: 'costByModel' },
         ],
       },
-      { displayName: 'ID', name: 'id', type: 'string', default: '' },
-      { displayName: 'Page', name: 'page', type: 'number', default: 1 },
-      { displayName: 'Page Size', name: 'pageSize', type: 'number', default: 50 },
-      { displayName: 'Status', name: 'status', type: 'string', default: '' },
-      { displayName: 'Entity Type', name: 'entityType', type: 'string', default: '' },
-      { displayName: 'Department ID', name: 'departmentId', type: 'string', default: '' },
-      { displayName: 'Environment', name: 'environment', type: 'string', default: '' },
-      { displayName: 'Search', name: 'search', type: 'string', default: '' },
-      { displayName: 'Date From', name: 'dateFrom', type: 'string', default: '' },
-      { displayName: 'Date To', name: 'dateTo', type: 'string', default: '' },
-      { displayName: 'Body', name: 'body', type: 'json', default: '{}' },
+      {
+        displayName: 'ID',
+        name: 'id',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['revoke'] } },
+      },
+      {
+        displayName: 'Page',
+        name: 'page',
+        type: 'number',
+        default: 1,
+        displayOptions: { show: { resource: ['agent', 'virtualKey'] } },
+      },
+      {
+        displayName: 'Page Size',
+        name: 'pageSize',
+        type: 'number',
+        default: 50,
+        displayOptions: { show: { resource: ['agent', 'virtualKey'] } },
+      },
+      {
+        displayName: 'Status',
+        name: 'status',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['agent', 'virtualKey'] } },
+      },
+      {
+        displayName: 'Entity Type',
+        name: 'entityType',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['list'] } },
+      },
+      {
+        displayName: 'Agent ID',
+        name: 'agentId',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['workspaceUsage'], workspaceUsageOperation: ['history'] } },
+      },
+      {
+        displayName: 'Member ID',
+        name: 'memberId',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['workspaceUsage'], workspaceUsageOperation: ['history'] } },
+      },
+      {
+        displayName: 'Department ID',
+        name: 'departmentId',
+        type: 'string',
+        default: '',
+        displayOptions: {
+          show: {
+            resource: ['agent'],
+            agentOperation: ['list'],
+          },
+        },
+      },
+      {
+        displayName: 'Department ID',
+        name: 'usageDepartmentId',
+        type: 'string',
+        default: '',
+        displayOptions: {
+          show: {
+            resource: ['workspaceUsage'],
+            workspaceUsageOperation: ['history'],
+          },
+        },
+      },
+      {
+        displayName: 'Environment',
+        name: 'environment',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['agent'], agentOperation: ['list'] } },
+      },
+      {
+        displayName: 'Search',
+        name: 'search',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['agent'], agentOperation: ['list'] } },
+      },
+      {
+        displayName: 'Date From',
+        name: 'dateFrom',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['workspaceUsage'], workspaceUsageOperation: ['history', 'costByModel'] } },
+      },
+      {
+        displayName: 'Date To',
+        name: 'dateTo',
+        type: 'string',
+        default: '',
+        displayOptions: { show: { resource: ['workspaceUsage'], workspaceUsageOperation: ['history', 'costByModel'] } },
+      },
+      {
+        displayName: 'Body',
+        name: 'agentBody',
+        type: 'json',
+        default: '{}',
+        displayOptions: {
+          show: {
+            resource: ['agent'],
+            agentOperation: ['create'],
+          },
+        },
+      },
+      {
+        displayName: 'Body',
+        name: 'virtualKeyBody',
+        type: 'json',
+        default: '{}',
+        displayOptions: {
+          show: {
+            resource: ['virtualKey'],
+            virtualKeyOperation: ['create'],
+          },
+        },
+      },
     ],
   };
 
@@ -1310,29 +1688,57 @@ export class AlephantManagement implements INodeType {
       (await this.getCredentials('alephantManagerApi')) as AlephantManagerCredentials,
     );
     const returnData: INodeExecutionData[] = [];
+    const operationParameterByResource: Record<ManagementResource, string> = {
+      agent: 'agentOperation',
+      virtualKey: 'virtualKeyOperation',
+      models: 'modelsOperation',
+      workspaceUsage: 'workspaceUsageOperation',
+    };
 
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-      const request = buildManagementRequest(
-        this.getNodeParameter('resource', itemIndex) as ManagementResource,
-        this.getNodeParameter('operation', itemIndex) as ManagementOperation,
-        {
-          id: this.getNodeParameter('id', itemIndex, ''),
-          page: this.getNodeParameter('page', itemIndex, 1),
-          pageSize: this.getNodeParameter('pageSize', itemIndex, 50),
-          status: this.getNodeParameter('status', itemIndex, ''),
-          entityType: this.getNodeParameter('entityType', itemIndex, ''),
-          departmentId: this.getNodeParameter('departmentId', itemIndex, ''),
-          environment: this.getNodeParameter('environment', itemIndex, ''),
-          search: this.getNodeParameter('search', itemIndex, ''),
-          dateFrom: this.getNodeParameter('dateFrom', itemIndex, ''),
-          dateTo: this.getNodeParameter('dateTo', itemIndex, ''),
-          body: this.getNodeParameter('body', itemIndex, {}) as Record<string, unknown>,
-        },
-      );
+      const resource = this.getNodeParameter('resource', itemIndex) as ManagementResource;
+      let request: ManagementRequest;
+
+      try {
+        request = buildManagementRequest(
+          resource,
+          this.getNodeParameter(
+            operationParameterByResource[resource],
+            itemIndex,
+          ) as ManagementOperation,
+          {
+            id: this.getNodeParameter('id', itemIndex, ''),
+            page: this.getNodeParameter('page', itemIndex, 1),
+            pageSize: this.getNodeParameter('pageSize', itemIndex, 50),
+            status: this.getNodeParameter('status', itemIndex, ''),
+            entityType: this.getNodeParameter('entityType', itemIndex, ''),
+            agentId: this.getNodeParameter('agentId', itemIndex, ''),
+            memberId: this.getNodeParameter('memberId', itemIndex, ''),
+            departmentId:
+              resource === 'workspaceUsage'
+                ? this.getNodeParameter('usageDepartmentId', itemIndex, '')
+                : this.getNodeParameter('departmentId', itemIndex, ''),
+            environment: this.getNodeParameter('environment', itemIndex, ''),
+            search: this.getNodeParameter('search', itemIndex, ''),
+            dateFrom: this.getNodeParameter('dateFrom', itemIndex, ''),
+            dateTo: this.getNodeParameter('dateTo', itemIndex, ''),
+            body:
+              resource === 'virtualKey'
+                ? parseJsonObjectInput(this.getNodeParameter('virtualKeyBody', itemIndex, {}), 'Body')
+                : parseJsonObjectInput(this.getNodeParameter('agentBody', itemIndex, {}), 'Body'),
+          },
+        );
+      } catch (error) {
+        throw new NodeOperationError(
+          this.getNode(),
+          error instanceof Error ? error.message : 'Invalid Alephant Management input',
+          { itemIndex },
+        );
+      }
 
       const data = await alephantRequest<Record<string, unknown>>(this, {
         method: request.method,
-        baseUrl: credentials.apiBaseUrl,
+        baseUrl: request.host === 'analytics' ? credentials.analyticsBaseUrl : credentials.saasBaseUrl,
         path: request.path,
         token: credentials.pat,
         workspaceId: credentials.workspaceId,
@@ -1368,8 +1774,8 @@ git commit -m "feat(n8n): add Alephant Management node"
 ## 任务 7：节点包验证
 
 **文件：**
-- 只有验证发现编译错误时，才修改前面任务创建的文件。
 
+- 只有验证发现编译错误时，才修改前面任务创建的文件。
 - [ ] **步骤 1：运行完整测试**
 
 运行：
@@ -1406,13 +1812,16 @@ npm run build
 
 ```bash
 node -e "const p=require('./package.json'); console.log(p.n8n.nodes.length, p.n8n.credentials.length)"
+node -e "const fs=require('fs'); const p=require('./package.json'); for (const f of [...p.n8n.nodes, ...p.n8n.credentials]) { if (!fs.existsSync(f)) throw new Error('Missing n8n entry: ' + f); }"
 ```
 
-预期输出：
+预期第一条命令输出：
 
 ```text
 3 2
 ```
+
+预期第二条命令无输出并以 0 退出。
 
 - [ ] **步骤 5：提交验证修复**
 
@@ -1425,195 +1834,29 @@ git commit -m "test(n8n): verify Alephant node package"
 
 如果没有文件变更，不创建空提交。
 
-## 任务 8：后端 VK Analytics 契约核对
+## 后续外部计划
+
+以下内容不在本 n8n 独立仓库计划中执行，避免跨仓库改动：
+
+- 后端：已核对 `backend-saas-service` 当前 PAT analytics handler / OpenAPI，`/api/v1/analytics/usage` 支持 `agentId`、`memberId`、`departmentId`，`/api/v1/analytics/models` 仅支持日期范围；暂未暴露 `virtualKeyId` filter，也没有 `/api/v1/virtual-keys/{id}/analytics/*` 路由。若第一版必须让 PAT 查询任意 VK 的 summary / history / models，另写后端计划新增 `GET /api/v1/virtual-keys/{id}/analytics/summary|history|models` 或在现有 analytics API 增加 `virtualKeyId` filter。
+- 前端：`Alephantinterface` 已有 PAT 创建 / reveal 入口，也已有 Agent / Member / Virtual Key 创建、reveal、rotate 等入口；不需要为了 n8n 新增 VK 或 PAT 创建入口。若后续要提高易用性，只另写 `Alephantinterface` 计划增加 n8n 配置片段 / 复制指引入口，并在 `Alephantinterface` 仓库上下文中执行和提交。
+
+## API Reference 核对记录
+
+本计划已结合 `https://developers.alephant.io/api-reference` 当前公开 API catalog 核对：
+
+- SaaS 后端 host 是 `https://alephant.io`，本计划使用的 Management 路由包括：`GET|POST /api/v1/agents`、`GET|POST /api/v1/virtual-keys`、`POST /api/v1/virtual-keys/{id}/revoke`、`GET /api/v1/models`。
+- 统计分析 host 是 `https://analytics.alephant.io`，本计划使用的 Usage / workspace analytics 路由包括：`GET /api/v1/cockpit/scope|budget-status|usage-summary|daily-costs|cost-by-model|recent-requests` 和 `GET /api/v1/analytics/overview|usage|models`。
+- Analytics usage 的 `GET /api/v1/analytics/usage` 只支持 `agentId`、`memberId`、`departmentId` 三种 scoped filter，且一次最多使用一个；未暴露 `virtualKeyId` filter。
+- API Reference 未暴露 `/api/v1/virtual-keys/{id}/analytics/summary|history|models`。因此 Alephant Management v1 不实现 PAT 任意 VK analytics，避免生成不可用操作。
+- AI Gateway host 是 `https://ai.alephant.io/v1`，OpenAI-compatible endpoint path 是 `POST /chat/completions`；执行前必须用当前生产 Gateway base URL 做 smoke test，确认 `Authorization: Bearer <virtual-key>` + OpenAI-compatible body 可用。
+- 生产 API host 需要在发布前最终确认：公开 API Reference 位于 `developers.alephant.io/api-reference`；当前 host 分别是 AI Gateway `https://ai.alephant.io/v1`、SaaS 后端 `https://alephant.io`、统计分析 `https://analytics.alephant.io`。现有 MCP 文档示例曾使用 `https://api.alephant.ai`。本 package 保持 base URL 可选配置；发布默认值必须以产品当前生产域名为准。
+
+## 任务 8：本地 n8n 运行 smoke test
 
 **文件：**
-- 读取：`backend-saas-service/docs/openapi/openapi.json`
-- 读取：`backend-saas-service/internal/api`
-- 必要时新建：`backend-saas-service/docs/superpowers/specs/2026-05-11-vk-analytics-management-api-design.md`
 
-本任务从 `/Users/allin/WE/AlephantAI-main` 执行，不从 `n8n/` 执行，因为要读取或更新 sibling 项目。
-
-- [ ] **步骤 1：检查 Management API 是否已有 VK analytics filter**
-
-从父仓库根运行：
-
-```bash
-jq -r '.paths | keys[]' backend-saas-service/docs/openapi/openapi.json | rg 'virtual-keys|analytics|usage|models'
-```
-
-预期：列出 virtual keys 与 analytics 相关接口。
-
-- [ ] **步骤 2：搜索 handler 是否支持 virtualKeyId**
-
-运行：
-
-```bash
-rg -n "virtualKeyId|virtual_key_id|analytics/usage|analytics/models|virtual-keys/.*/analytics" backend-saas-service/internal backend-saas-service/docs/openapi/openapi.json
-```
-
-预期：明确已有 filter 支持，或确认没有支持。
-
-- [ ] **步骤 3：记录决策**
-
-如果已有 filter 支持，更新本计划中 `Virtual Key Usage` 的路径，改为现有 filter 契约。
-
-如果没有支持，新建 `backend-saas-service/docs/superpowers/specs/2026-05-11-vk-analytics-management-api-design.md`：
-
-```markdown
-# VK Analytics Management API 设计
-
-日期：2026-05-11
-状态：待实现
-
-## 目标
-
-为 PAT 管理模式提供按 Virtual Key 查询 summary、history、model cost 的只读接口，供 Alephant n8n Management 节点使用。
-
-## 接口
-
-- `GET /api/v1/virtual-keys/{id}/analytics/summary`
-- `GET /api/v1/virtual-keys/{id}/analytics/history?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD`
-- `GET /api/v1/virtual-keys/{id}/analytics/models?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD`
-
-## 权限
-
-- Bearer PAT。
-- 必须带 `X-Workspace-Id`。
-- PAT 至少需要 read scope。
-- Path 中的 VK 必须属于当前 workspace。
-
-## 数据来源
-
-复用现有 analytics service / ClickHouse 查询路径，增加 `virtual_key_id` 过滤。
-```
-
-- [ ] **步骤 4：提交后端契约记录**
-
-如果创建了 spec 或更新了本计划：
-
-```bash
-git add n8n/docs/superpowers/plans/2026-05-11-alephant-n8n-nodes-v1.md backend-saas-service/docs/superpowers/specs/2026-05-11-vk-analytics-management-api-design.md
-git commit -m "docs(n8n): record VK analytics backend contract"
-```
-
-## 任务 9：前端 n8n 配置入口
-
-**文件：**
-- 读取：`Alephantinterface/src/app/components/common/McpConfigSnippet.tsx`
-- 读取：`Alephantinterface/src/app/components/settings/PatApiAccessPanel.tsx`
-- 读取：`Alephantinterface/src/app/components/EnterpriseApiKeysTab.tsx`
-- 新建：`Alephantinterface/src/app/components/common/N8nConfigSnippet.tsx`
-- 修改：实施时定位到的 PAT 和 VK 详情 / 创建成功入口组件。
-- 测试：就近已有组件测试。
-
-本任务从 `/Users/allin/WE/AlephantAI-main` 执行，不从 `n8n/` 执行，因为要读取和更新 sibling 前端项目。
-
-- [ ] **步骤 1：查看现有 copy config 模式**
-
-运行：
-
-```bash
-sed -n '1,220p' Alephantinterface/src/app/components/common/McpConfigSnippet.tsx
-sed -n '1,260p' Alephantinterface/src/app/components/settings/PatApiAccessPanel.tsx
-rg -n "McpConfigSnippet|reveal.*Virtual|fullToken|Copy MCP" Alephantinterface/src/app/components Alephantinterface/src/locales
-```
-
-预期：定位 PAT 和 VK 入口实际文件。
-
-- [ ] **步骤 2：创建共享 n8n snippet 组件**
-
-创建 `Alephantinterface/src/app/components/common/N8nConfigSnippet.tsx`：
-
-```tsx
-import { useMemo, useState } from 'react';
-
-type N8nMode = 'ai' | 'usage' | 'management';
-
-interface N8nConfigSnippetProps {
-  mode: N8nMode;
-  virtualKey?: string;
-  pat?: string;
-  workspaceId?: string;
-}
-
-export function N8nConfigSnippet({ mode, virtualKey, pat, workspaceId }: N8nConfigSnippetProps) {
-  const [copied, setCopied] = useState(false);
-  const content = useMemo(() => {
-    if (mode === 'management') {
-      return JSON.stringify({ credential: 'Alephant Manager', pat, workspaceId }, null, 2);
-    }
-    return JSON.stringify({ credential: 'Alephant Virtual Key', virtualKey }, null, 2);
-  }, [mode, pat, virtualKey, workspaceId]);
-
-  async function copy() {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <section className="rounded-md border border-border bg-muted/30 p-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-sm font-medium">Use with n8n</span>
-        <button type="button" className="text-sm text-primary" onClick={copy}>
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre className="overflow-auto rounded bg-gray-950 p-3 text-xs text-gray-100">
-        <code>{content}</code>
-      </pre>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Base URLs are optional in production. Override them in n8n only for staging, local, or self-hosted testing.
-      </p>
-    </section>
-  );
-}
-```
-
-- [ ] **步骤 3：增加 VK 入口**
-
-修改步骤 1 定位到的 VK create success 和 VK detail 组件：
-
-```tsx
-<N8nConfigSnippet mode="ai" virtualKey={fullTokenOrRevealedKey} />
-<N8nConfigSnippet mode="usage" virtualKey={fullTokenOrRevealedKey} />
-```
-
-必须复用现有 reveal / copy 流程；只有 prefix、没有明文 key 时，不展示 snippet。
-
-- [ ] **步骤 4：增加 PAT 入口**
-
-修改 `PatApiAccessPanel.tsx` 或步骤 1 定位到的 PAT row / success 组件：
-
-```tsx
-<N8nConfigSnippet mode="management" pat={plaintextPatOrRevealedPat} workspaceId={workspaceId} />
-```
-
-必须复用现有 PAT reveal 流程；无法拿到明文或 revealed token 时，不展示假 token。
-
-- [ ] **步骤 5：运行前端测试**
-
-从 `Alephantinterface/` 运行：
-
-```bash
-npm test -- --runInBand
-```
-
-预期：现有测试通过。如果该仓库测试脚本不同，先读 `Alephantinterface/package.json`，执行最接近的组件或单元测试命令。
-
-- [ ] **步骤 6：提交前端入口**
-
-```bash
-git add Alephantinterface/src/app/components/common/N8nConfigSnippet.tsx Alephantinterface/src/app/components Alephantinterface/src/locales
-git commit -m "feat(interface): add n8n configuration snippets"
-```
-
-## 任务 10：本地 n8n 运行 smoke test
-
-**文件：**
 - 只有 smoke test 发现 package 或 runtime 缺陷时才修改。
-
 - [ ] **步骤 1：构建 package**
 
 从 `n8n/` 运行：
@@ -1629,14 +1872,18 @@ npm run build
 运行：
 
 ```bash
-npx @n8n/node dev
+npm run dev
 ```
 
 预期：n8n 本地 dev 启动，并输出 localhost URL。
 
-- [ ] **步骤 3：验证节点出现**
+- [ ] **步骤 3：核对生产 base URL 默认值**
 
-打开 `npx @n8n/node dev` 输出的 localhost URL，创建 workflow，搜索：
+发布前必须确认 `DEFAULT_GATEWAY_BASE_URL`、`DEFAULT_SAAS_BASE_URL` 和 `DEFAULT_ANALYTICS_BASE_URL` 与当前产品生产域名一致。当前默认值应分别为 `https://ai.alephant.io/v1`、`https://alephant.io` 和 `https://analytics.alephant.io`；如产品域名再变化，先更新 `shared/constants.ts`、credential 默认值测试和 README，再继续 smoke test。
+
+- [ ] **步骤 4：验证节点出现**
+
+打开 `npm run dev` 输出的 localhost URL，创建 workflow，搜索：
 
 ```text
 Alephant AI
@@ -1651,7 +1898,7 @@ Alephant Virtual Key
 Alephant Manager
 ```
 
-- [ ] **步骤 4：验证 base URL 可选**
+- [ ] **步骤 5：验证 base URL 可选**
 
 创建 `Alephant Virtual Key` credential，只填写：
 
@@ -1659,7 +1906,7 @@ Alephant Manager
 Virtual Key = vk-test
 ```
 
-预期：保存成功，不要求填写 `gatewayBaseUrl` 或 `apiBaseUrl`。
+预期：保存成功，不要求填写 `gatewayBaseUrl` 或 `analyticsBaseUrl`。
 
 创建 `Alephant Manager` credential，只填写：
 
@@ -1668,9 +1915,9 @@ Personal Access Token = pat_test
 Workspace ID = 00000000-0000-0000-0000-000000000000
 ```
 
-预期：保存成功，不要求填写 `apiBaseUrl`。
+预期：保存成功，不要求填写 `saasBaseUrl` 或 `analyticsBaseUrl`。
 
-- [ ] **步骤 5：提交 runtime 修复**
+- [ ] **步骤 6：提交 runtime 修复**
 
 如果 smoke test 期间有文件修改：
 
@@ -1681,19 +1928,19 @@ git commit -m "fix(n8n): resolve local runtime issues"
 
 如果没有文件变更，不创建空提交。
 
-## 任务 11：文档
+## 任务 9：文档
 
 **文件：**
+
 - 新建：`README.md`
 - 新建：`docs/connect-alephant-ai-to-n8n.md`
 - 新建：`docs/check-alephant-virtual-key-usage-in-n8n.md`
 - 新建：`docs/automate-alephant-management-in-n8n.md`
-
 - [ ] **步骤 1：写 README**
 
 创建 `README.md`：
 
-```markdown
+````markdown
 # @alephantai/n8n-nodes-alephant
 
 n8n community nodes for Alephant BYO-KEY.
@@ -1702,7 +1949,7 @@ n8n community nodes for Alephant BYO-KEY.
 
 - Alephant AI: call Alephant AI Gateway with a Virtual Key.
 - Alephant Usage: inspect usage and budget for the current Virtual Key.
-- Alephant Management: manage Agents, Virtual Keys, models, and analytics with PAT + workspaceId.
+- Alephant Management: manage Agents, Virtual Keys, models, and workspace analytics with PAT + workspaceId.
 
 ## Credentials
 
@@ -1715,7 +1962,7 @@ Required:
 Optional:
 
 - Gateway Base URL
-- API Base URL
+- Analytics Base URL
 
 Leave base URLs empty for production defaults. Override them for staging, local, or self-hosted testing.
 
@@ -1728,7 +1975,13 @@ Required:
 
 Optional:
 
-- API Base URL
+- SaaS Base URL
+- Analytics Base URL
+
+PAT scopes:
+
+- Read scope: list, models, and workspace analytics operations.
+- Write scope: create, revoke, rotate, or update operations.
 
 ## Development
 
@@ -1737,9 +1990,10 @@ npm install
 npm test
 npm run lint
 npm run build
-npx @n8n/node dev
+npm run dev
 ```
-```
+
+````
 
 - [ ] **步骤 2：写三份使用文档**
 
@@ -1768,6 +2022,8 @@ npx @n8n/node dev
 3. Choose one operation: `Get My Budget Status`, `Get My Usage Summary`, `Get My Daily Costs`, `Get My Cost By Model`, or `Get My Recent Requests`.
 4. Choose a period when the operation supports it.
 5. Execute the workflow.
+
+`Get My Recent Requests` may return a degraded empty list until scoped request logs are wired in the backend.
 ```
 
 创建 `docs/automate-alephant-management-in-n8n.md`：
@@ -1777,12 +2033,13 @@ npx @n8n/node dev
 
 1. Create an `Alephant Manager` credential.
 2. Fill `Personal Access Token` and `Workspace ID`.
-3. Leave `API Base URL` empty for production.
+3. Leave `SaaS Base URL` and `Analytics Base URL` empty for production.
 4. Add the `Alephant Management` node.
-5. Choose a resource: `Agent`, `Virtual Key`, `Models`, `Workspace Usage`, or `Virtual Key Usage`.
+5. Choose a resource: `Agent`, `Virtual Key`, `Models`, or `Workspace Usage`.
 6. Choose an operation and execute.
 
 Use this credential only for trusted administrator workflows.
+Use a read-scope PAT for list and analytics workflows. Use a write-scope PAT only for workflows that create, revoke, rotate, or update resources.
 ```
 
 - [ ] **步骤 3：提交文档**
@@ -1814,7 +2071,7 @@ npm run build
 git status --short
 ```
 
-预期：没有未提交的 n8n package 变更。父仓库已有的无关改动可能仍存在，不要回退它们。
+预期：没有未提交的 n8n package 变更。若看到父仓库路径或 sibling 项目改动，说明当前不在 n8n 独立仓库上下文，应停止并切回 `/Users/allin/WE/AlephantAI-main/n8n`。
 
 - [ ] **步骤 3：准备发布决策**
 
@@ -1822,6 +2079,8 @@ git status --short
 
 ## 自检记录
 
-- 设计覆盖：本计划覆盖三个 n8n 节点、两个 credentials、base URL 可选行为、后端 VK analytics 契约、前端 n8n 配置入口、本地 n8n smoke test 和文档。
-- 已知依赖：Management 节点的 `Virtual Key Usage` 依赖现有 `virtualKeyId` analytics filter，或后端新增 `/virtual-keys/{id}/analytics/*` 接口。
+- 设计覆盖：本计划覆盖三个 n8n 节点、两个 credentials、base URL 可选行为、本地 n8n smoke test 和文档。
+- 已知依赖：PAT 任意 VK 维度 analytics 当前不在 `backend-saas-service` 已暴露契约内；该事项已移入后续后端计划，不在本 n8n 仓库主流程中执行。当前 VK 自查额度 / 用量 / 成本由 `Alephant Usage` 节点通过 Virtual Key credential 调 cockpit API 完成。
+- 已知限制：`/api/v1/cockpit/recent-requests` 当前后端实现会返回 `degraded=true` 的空列表，直到 scoped request logs 后端接入；Usage 节点可以保留该 operation，但文档和测试不应承诺一定返回真实请求明细。
+- 外部配套：`Alephantinterface` 已有 VK / PAT 创建和 reveal 入口；前端 n8n 配置片段入口属于后续易用性增强，不在本 n8n 仓库主流程中执行。
 - 明确非目标：Trigger Node、Streaming、Responses API、Embeddings、Billing、Member / Department / Master Key 管理、Policy 配置、PAT 管理和 OAuth。
