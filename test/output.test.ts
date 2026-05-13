@@ -25,6 +25,18 @@ describe('shared output helpers', () => {
     expect(normalized.usage.total_tokens).toBe(14);
   });
 
+  it('normalizes non-string chat completion content to a string', () => {
+    const normalized = normalizeChatCompletion({
+      choices: [
+        {
+          message: { role: 'assistant', content: { type: 'text', value: 'Hello' } },
+        },
+      ],
+    });
+
+    expect(normalized.text).toBe('[object Object]');
+  });
+
   it('trims trailing slashes from base URLs', () => {
     expect(trimTrailingSlash('https://analytics.alephant.io///')).toBe('https://analytics.alephant.io');
   });

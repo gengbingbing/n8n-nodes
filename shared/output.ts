@@ -6,10 +6,11 @@ export function trimTrailingSlash(value: string): string {
 
 export function normalizeChatCompletion(raw: any, requestId?: string): NormalizedChatCompletion {
   const firstChoice = Array.isArray(raw?.choices) ? raw.choices[0] : undefined;
-  const text =
+  const content =
     firstChoice?.message?.content ??
     firstChoice?.text ??
     '';
+  const text = typeof content === 'string' ? content : String(content);
 
   return {
     raw,
