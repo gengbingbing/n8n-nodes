@@ -1,4 +1,8 @@
-import { buildChatCompletionBody, parseMessagesInput } from '../nodes/AlephantAi/AlephantAi.node';
+import {
+  AlephantAi,
+  buildChatCompletionBody,
+  parseMessagesInput,
+} from '../nodes/AlephantAi/AlephantAi.node';
 
 describe('Alephant AI node', () => {
   it('builds a prompt-mode chat completion body', () => {
@@ -18,6 +22,41 @@ describe('Alephant AI node', () => {
     expect(body.temperature).toBe(0.2);
     expect(body.max_tokens).toBe(200);
     expect(body.response_format).toEqual({ type: 'json_object' });
+  });
+
+  it('omits optional fields from the default chat completion body', () => {
+    const body = buildChatCompletionBody({
+      model: 'gpt-4o-mini',
+      inputMode: 'prompt',
+      prompt: 'Hi',
+      metadata: {},
+      additionalOptions: {},
+    });
+
+    expect(body.temperature).toBeUndefined();
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.metadata).toBeUndefined();
+  });
+
+  it('includes metadata only when it has keys', () => {
+    const body = buildChatCompletionBody({
+      model: 'gpt-4o-mini',
+      inputMode: 'prompt',
+      prompt: 'Hi',
+      metadata: { workflow: 'wf_1' },
+      additionalOptions: {},
+    });
+
+    expect(body.metadata).toEqual({ workflow: 'wf_1' });
+  });
+
+  it('does not configure temperature and max tokens by default', () => {
+    const node = new AlephantAi();
+    const temperature = node.description.properties.find(({ name }) => name === 'temperature');
+    const maxTokens = node.description.properties.find(({ name }) => name === 'maxTokens');
+
+    expect(temperature?.default).toBeUndefined();
+    expect(maxTokens?.default).toBeUndefined();
   });
 
   it('builds a messages-mode chat completion body', () => {

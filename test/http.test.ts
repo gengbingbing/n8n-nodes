@@ -135,4 +135,29 @@ describe('shared HTTP helpers', () => {
       },
     });
   });
+
+  it('adds item index to wrapped request failures when provided', async () => {
+    const httpRequest = jest.fn().mockRejectedValue({ message: 'Gateway failed' });
+    const ctx = createExecuteContext(httpRequest);
+
+    let thrownError: unknown;
+    try {
+      await alephantRequest(ctx, {
+        method: 'POST',
+        baseUrl: DEFAULT_GATEWAY_BASE_URL,
+        path: ENDPOINTS.chatCompletions,
+        token: 'vk_test',
+        itemIndex: 2,
+      });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBeInstanceOf(NodeApiError);
+    expect(thrownError).toMatchObject({
+      context: {
+        itemIndex: 2,
+      },
+    });
+  });
 });

@@ -10,6 +10,7 @@ export function toNodeApiError(
   error: unknown,
   method: IHttpRequestMethods,
   url: string,
+  itemIndex?: number,
 ): NodeApiError {
   if (error instanceof NodeApiError) {
     return error;
@@ -17,11 +18,11 @@ export function toNodeApiError(
 
   const description = `${method} ${url}`;
   if (isObjectLike(error)) {
-    const nodeApiError = new NodeApiError(ctx.getNode(), error, { description });
+    const nodeApiError = new NodeApiError(ctx.getNode(), error, { description, itemIndex });
     nodeApiError.description = description;
     return nodeApiError;
   }
 
   const message = typeof error === 'string' ? error : 'Alephant request failed';
-  return new NodeApiError(ctx.getNode(), { message }, { description });
+  return new NodeApiError(ctx.getNode(), { message }, { description, itemIndex });
 }

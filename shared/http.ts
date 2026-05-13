@@ -10,6 +10,7 @@ export interface AlephantRequestOptions {
   workspaceId?: string;
   qs?: IDataObject;
   body?: IDataObject;
+  itemIndex?: number;
 }
 
 export async function alephantRequest<T>(
@@ -33,6 +34,6 @@ export async function alephantRequest<T>(
   try {
     return (await ctx.helpers.httpRequest(request)) as T;
   } catch (error) {
-    throw toNodeApiError(ctx, error, options.method, url);
+    throw toNodeApiError(ctx, error, options.method, url, options.itemIndex);
   }
 }

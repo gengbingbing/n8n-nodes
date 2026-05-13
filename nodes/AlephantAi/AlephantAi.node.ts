@@ -40,6 +40,10 @@ function filterAdditionalOptions(options: Record<string, unknown>): IDataObject 
   ) as IDataObject;
 }
 
+function hasObjectKeys(value: Record<string, unknown> | undefined): value is Record<string, unknown> {
+  return value !== undefined && Object.keys(value).length > 0;
+}
+
 export function buildChatCompletionBody(input: ChatCompletionInput): IDataObject {
   const messages =
     input.inputMode === 'messages'
@@ -52,13 +56,13 @@ export function buildChatCompletionBody(input: ChatCompletionInput): IDataObject
     messages,
   };
 
-  if (input.temperature !== undefined) {
+  if (typeof input.temperature === 'number') {
     body.temperature = input.temperature;
   }
-  if (input.maxTokens !== undefined) {
+  if (typeof input.maxTokens === 'number') {
     body.max_tokens = input.maxTokens;
   }
-  if (input.metadata) {
+  if (hasObjectKeys(input.metadata)) {
     body.metadata = input.metadata;
   }
   if (input.responseFormat && input.responseFormat !== 'text') {
@@ -154,13 +158,13 @@ export class AlephantAi implements INodeType {
         displayName: 'Temperature',
         name: 'temperature',
         type: 'number',
-        default: 0.7,
+        default: undefined,
       },
       {
         displayName: 'Max Tokens',
         name: 'maxTokens',
         type: 'number',
-        default: 1024,
+        default: undefined,
       },
       {
         displayName: 'Response Format',
@@ -238,10 +242,12 @@ export class AlephantAi implements INodeType {
         path: ENDPOINTS.chatCompletions,
         token: credentials.virtualKey,
         body,
+        itemIndex,
       });
 
       returnData.push({
         json: normalizeChatCompletion(raw) as unknown as IDataObject,
+        pairedItem: { item: itemIndex },
       });
     }
 
