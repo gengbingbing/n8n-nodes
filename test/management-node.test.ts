@@ -1,0 +1,271 @@
+import type { IExecuteFunctions } from 'n8n-workflow';
+import {
+  AlephantManagement,
+  buildManagementRequest,
+} from '../nodes/AlephantManagement/AlephantManagement.node';
+
+describe('Alephant Management node', () => {
+  it('maps virtual key revoke', () => {
+    expect(buildManagementRequest('virtualKey', 'revoke', { id: 'vk-id' })).toEqual({
+      method: 'POST',
+      host: 'saas',
+      path: '/api/v1/virtual-keys/vk-id/revoke',
+    });
+  });
+
+  it('maps workspace usage history', () => {
+    expect(
+      buildManagementRequest('workspaceUsage', 'history', {
+        dateFrom: '2026-05-01',
+        dateTo: '2026-05-11',
+      }),
+    ).toEqual({
+      method: 'GET',
+      host: 'analytics',
+      path: '/api/v1/analytics/usage',
+      qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11' },
+    });
+  });
+
+  it('maps workspace usage history with agent filter', () => {
+    expect(
+      buildManagementRequest('workspaceUsage', 'history', {
+        dateFrom: '2026-05-01',
+        dateTo: '2026-05-11',
+        agentId: 'agent-id',
+      }),
+    ).toEqual({
+      method: 'GET',
+      host: 'analytics',
+      path: '/api/v1/analytics/usage',
+      qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11', agentId: 'agent-id' },
+    });
+  });
+
+  it('rejects workspace usage history with multiple scoped filters', () => {
+    expect(() =>
+      buildManagementRequest('workspaceUsage', 'history', {
+        agentId: 'agent-id',
+        memberId: 'member-id',
+      }),
+    ).toThrow('Choose only one analytics scope filter');
+  });
+
+  it('requires an id for virtual key revoke', () => {
+    expect(() => buildManagementRequest('virtualKey', 'revoke', { id: '' })).toThrow(
+      'Virtual Key ID is required',
+    );
+  });
+
+  it('requires a non-empty body for agent create', () => {
+    expect(() => buildManagementRequest('agent', 'create', { body: {} })).toThrow(
+      'Body must not be empty',
+    );
+  });
+
+  it('requires a non-empty body for virtual key create', () => {
+    expect(() => buildManagementRequest('virtualKey', 'create', { body: {} })).toThrow(
+      'Body must not be empty',
+    );
+  });
+
+  it.each([
+    [
+      'agent',
+      'list',
+      {
+        page: 2,
+        pageSize: 25,
+        status: 'active',
+        departmentId: 'dept-id',
+        environment: 'prod',
+        search: 'Support',
+      },
+      {
+        method: 'GET',
+        host: 'saas',
+        path: '/api/v1/agents',
+        qs: {
+          page: 2,
+          pageSize: 25,
+          status: 'active',
+          departmentId: 'dept-id',
+          environment: 'prod',
+          search: 'Support',
+        },
+      },
+    ],
+    [
+      'agent',
+      'create',
+      { body: { name: 'Support Agent' } },
+      {
+        method: 'POST',
+        host: 'saas',
+        path: '/api/v1/agents',
+        body: { name: 'Support Agent' },
+      },
+    ],
+    [
+      'virtualKey',
+      'list',
+      { page: 1, pageSize: 50, status: 'active', entityType: 'agent' },
+      {
+        method: 'GET',
+        host: 'saas',
+        path: '/api/v1/virtual-keys',
+        qs: { page: 1, pageSize: 50, status: 'active', entityType: 'agent' },
+      },
+    ],
+    [
+      'virtualKey',
+      'create',
+      { body: { name: 'Key', entityId: 'agent-id' } },
+      {
+        method: 'POST',
+        host: 'saas',
+        path: '/api/v1/virtual-keys',
+        body: { name: 'Key', entityId: 'agent-id' },
+      },
+    ],
+    [
+      'models',
+      'list',
+      {},
+      {
+        method: 'GET',
+        host: 'saas',
+        path: '/api/v1/models',
+      },
+    ],
+    [
+      'workspaceUsage',
+      'summary',
+      {},
+      {
+        method: 'GET',
+        host: 'analytics',
+        path: '/api/v1/analytics/overview',
+      },
+    ],
+    [
+      'workspaceUsage',
+      'costByModel',
+      { dateFrom: '2026-05-01', dateTo: '2026-05-11' },
+      {
+        method: 'GET',
+        host: 'analytics',
+        path: '/api/v1/analytics/models',
+        qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11' },
+      },
+    ],
+  ] as const)('maps %s.%s', (resource, operation, params, expected) => {
+    expect(buildManagementRequest(resource, operation, params)).toEqual(expected);
+  });
+
+  it('omits empty query values', () => {
+    expect(
+      buildManagementRequest('agent', 'list', {
+        page: 1,
+        pageSize: undefined,
+        status: '',
+        departmentId: null,
+        environment: 'prod',
+      }),
+    ).toEqual({
+      method: 'GET',
+      host: 'saas',
+      path: '/api/v1/agents',
+      qs: { page: 1, environment: 'prod' },
+    });
+  });
+
+  it('omits the query object when all values are empty', () => {
+    expect(
+      buildManagementRequest('workspaceUsage', 'costByModel', {
+        dateFrom: '',
+        dateTo: null,
+      }),
+    ).toEqual({
+      method: 'GET',
+      host: 'analytics',
+      path: '/api/v1/analytics/models',
+    });
+  });
+
+  it('rejects unsupported operation combinations', () => {
+    expect(() => buildManagementRequest('models', 'create', {})).toThrow(
+      'Unsupported Alephant Management operation: models.create',
+    );
+  });
+
+  it('executes management requests with manager credentials and paired items', async () => {
+    const httpRequest = jest
+      .fn()
+      .mockResolvedValueOnce({ agents: [] })
+      .mockResolvedValueOnce({ total_cost: 12.34 });
+    const node = new AlephantManagement();
+    const ctx = {
+      getInputData: jest.fn().mockReturnValue([{ json: {} }, { json: {} }]),
+      getCredentials: jest.fn().mockResolvedValue({
+        pat: 'pat_test',
+        workspaceId: 'workspace-id',
+        saasBaseUrl: 'https://saas.example/',
+        analyticsBaseUrl: 'https://analytics.example/',
+      }),
+      getNodeParameter: jest.fn((name: string, itemIndex: number) => {
+        const values: Array<Record<string, unknown>> = [
+          {
+            resource: 'agent',
+            agentOperation: 'list',
+            page: 1,
+            pageSize: 25,
+            status: 'active',
+            departmentId: '',
+            environment: '',
+            search: '',
+          },
+          {
+            resource: 'workspaceUsage',
+            workspaceUsageOperation: 'summary',
+          },
+        ];
+
+        return values[itemIndex][name];
+      }),
+      helpers: { httpRequest },
+    } as unknown as IExecuteFunctions;
+
+    await expect(node.execute.call(ctx)).resolves.toEqual([
+      [
+        { json: { agents: [] }, pairedItem: { item: 0 } },
+        { json: { total_cost: 12.34 }, pairedItem: { item: 1 } },
+      ],
+    ]);
+
+    expect(httpRequest).toHaveBeenNthCalledWith(1, {
+      method: 'GET',
+      url: 'https://saas.example/api/v1/agents',
+      json: true,
+      headers: {
+        Authorization: 'Bearer pat_test',
+        'Content-Type': 'application/json',
+        'X-Workspace-Id': 'workspace-id',
+      },
+      qs: { page: 1, pageSize: 25, status: 'active' },
+      body: undefined,
+    });
+    expect(httpRequest).toHaveBeenNthCalledWith(2, {
+      method: 'GET',
+      url: 'https://analytics.example/api/v1/analytics/overview',
+      json: true,
+      headers: {
+        Authorization: 'Bearer pat_test',
+        'Content-Type': 'application/json',
+        'X-Workspace-Id': 'workspace-id',
+      },
+      qs: undefined,
+      body: undefined,
+    });
+  });
+});
