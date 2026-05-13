@@ -160,4 +160,42 @@ describe('shared HTTP helpers', () => {
       },
     });
   });
+
+  it('adds item index to existing NodeApiError request failures', async () => {
+    const ctx = createExecuteContext(jest.fn());
+    const existingError = new NodeApiError(
+      ctx.getNode(),
+      {
+        message: 'Gateway failed',
+        response: {
+          status: 502,
+          data: { error: 'Bad gateway' },
+        },
+      },
+      { description: 'POST https://ai.alephant.io/v1/chat/completions' },
+    );
+    const httpRequest = jest.fn().mockRejectedValue(existingError);
+    const requestCtx = createExecuteContext(httpRequest);
+
+    let thrownError: unknown;
+    try {
+      await alephantRequest(requestCtx, {
+        method: 'POST',
+        baseUrl: DEFAULT_GATEWAY_BASE_URL,
+        path: ENDPOINTS.chatCompletions,
+        token: 'vk_test',
+        itemIndex: 3,
+      });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBe(existingError);
+    expect(thrownError).toMatchObject({
+      context: {
+        itemIndex: 3,
+      },
+      description: 'POST https://ai.alephant.io/v1/chat/completions',
+    });
+  });
 });

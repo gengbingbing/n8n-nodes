@@ -13,6 +13,9 @@ export function toNodeApiError(
   itemIndex?: number,
 ): NodeApiError {
   if (error instanceof NodeApiError) {
+    if (itemIndex !== undefined && error.context.itemIndex === undefined) {
+      error.context.itemIndex = itemIndex;
+    }
     return error;
   }
 
