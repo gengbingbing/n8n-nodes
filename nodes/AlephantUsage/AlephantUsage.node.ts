@@ -20,14 +20,30 @@ export type UsageOperation =
   | 'recentRequests';
 
 export interface UsageRequestParams {
-  period?: string;
-  limit?: number;
-  offset?: number;
+  period?: string | null;
+  limit?: number | null;
+  offset?: number | null;
 }
 
 export interface UsageRequest {
   path: string;
   qs?: IDataObject;
+}
+
+function withQs(path: string, qs: IDataObject): UsageRequest {
+  const sanitized = Object.fromEntries(
+    Object.entries(qs).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+  ) as IDataObject;
+
+  return Object.keys(sanitized).length > 0 ? { path, qs: sanitized } : { path };
+}
+
+function isPositiveNumber(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function isNonNegativeNumber(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 export function buildUsageRequest(
@@ -38,18 +54,18 @@ export function buildUsageRequest(
     case 'scope':
       return { path: ENDPOINTS.cockpitScope };
     case 'budgetStatus':
-      return { path: ENDPOINTS.cockpitBudgetStatus, qs: { period: params.period } };
+      return withQs(ENDPOINTS.cockpitBudgetStatus, { period: params.period });
     case 'usageSummary':
-      return { path: ENDPOINTS.cockpitUsageSummary, qs: { period: params.period } };
+      return withQs(ENDPOINTS.cockpitUsageSummary, { period: params.period });
     case 'dailyCosts':
-      return { path: ENDPOINTS.cockpitDailyCosts, qs: { period: params.period } };
+      return withQs(ENDPOINTS.cockpitDailyCosts, { period: params.period });
     case 'costByModel':
-      return { path: ENDPOINTS.cockpitCostByModel, qs: { period: params.period } };
+      return withQs(ENDPOINTS.cockpitCostByModel, { period: params.period });
     case 'recentRequests':
-      return {
-        path: ENDPOINTS.cockpitRecentRequests,
-        qs: { limit: params.limit, offset: params.offset },
-      };
+      return withQs(ENDPOINTS.cockpitRecentRequests, {
+        limit: isPositiveNumber(params.limit) ? params.limit : undefined,
+        offset: isNonNegativeNumber(params.offset) ? params.offset : undefined,
+      });
   }
 }
 
