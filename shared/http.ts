@@ -1,6 +1,6 @@
 import type { IDataObject, IExecuteFunctions, IHttpRequestMethods, IHttpRequestOptions } from 'n8n-workflow';
 import { toNodeApiError } from './errors';
-import { trimTrailingSlash } from './output';
+import { trimTrailingSlash } from './url';
 
 export interface AlephantRequestOptions {
   method: IHttpRequestMethods;

@@ -1,8 +1,5 @@
 import type { NormalizedChatCompletion } from './types';
-
-export function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, '');
-}
+export { trimTrailingSlash } from './url';
 
 export function normalizeChatCompletion(raw: any, requestId?: string): NormalizedChatCompletion {
   const firstChoice = Array.isArray(raw?.choices) ? raw.choices[0] : undefined;

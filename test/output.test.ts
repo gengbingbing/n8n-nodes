@@ -1,5 +1,6 @@
 import { parseJsonObjectInput } from '../shared/json';
 import { normalizeChatCompletion, trimTrailingSlash } from '../shared/output';
+import { trimTrailingSlash as trimUrlTrailingSlash } from '../shared/url';
 
 describe('shared output helpers', () => {
   it('normalizes chat completion text and usage', () => {
@@ -39,6 +40,10 @@ describe('shared output helpers', () => {
 
   it('trims trailing slashes from base URLs', () => {
     expect(trimTrailingSlash('https://analytics.alephant.io///')).toBe('https://analytics.alephant.io');
+  });
+
+  it('exposes focused URL trimming helper', () => {
+    expect(trimUrlTrailingSlash('https://ai.alephant.io/v1///')).toBe('https://ai.alephant.io/v1');
   });
 
   it('parses JSON object parameters from strings and objects', () => {

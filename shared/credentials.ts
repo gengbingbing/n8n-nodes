@@ -3,8 +3,8 @@ import {
   DEFAULT_GATEWAY_BASE_URL,
   DEFAULT_SAAS_BASE_URL,
 } from './constants';
-import { trimTrailingSlash } from './output';
 import type { AlephantManagerCredentials, AlephantVirtualKeyCredentials } from './types';
+import { trimTrailingSlash } from './url';
 
 export function resolveVirtualKeyCredentials(
   raw: AlephantVirtualKeyCredentials,
