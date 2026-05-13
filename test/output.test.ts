@@ -1,0 +1,43 @@
+import { parseJsonObjectInput } from '../shared/json';
+import { normalizeChatCompletion, trimTrailingSlash } from '../shared/output';
+
+describe('shared output helpers', () => {
+  it('normalizes chat completion text and usage', () => {
+    const normalized = normalizeChatCompletion(
+      {
+        id: 'chatcmpl_123',
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            message: { role: 'assistant', content: 'Hello from Alephant' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 },
+      },
+      'req_123',
+    );
+
+    expect(normalized.text).toBe('Hello from Alephant');
+    expect(normalized.model).toBe('gpt-4o-mini');
+    expect(normalized.requestId).toBe('req_123');
+    expect(normalized.finishReason).toBe('stop');
+    expect(normalized.usage.total_tokens).toBe(14);
+  });
+
+  it('trims trailing slashes from base URLs', () => {
+    expect(trimTrailingSlash('https://analytics.alephant.io///')).toBe('https://analytics.alephant.io');
+  });
+
+  it('parses JSON object parameters from strings and objects', () => {
+    expect(parseJsonObjectInput('{"seed":7}', 'Additional Options')).toEqual({ seed: 7 });
+    expect(parseJsonObjectInput({ workflow: 'wf_1' }, 'Metadata')).toEqual({ workflow: 'wf_1' });
+    expect(parseJsonObjectInput('', 'Metadata')).toEqual({});
+    expect(parseJsonObjectInput(undefined, 'Metadata')).toEqual({});
+  });
+
+  it('rejects JSON parameters that are not objects', () => {
+    expect(() => parseJsonObjectInput('[1,2]', 'Metadata')).toThrow('Metadata must be a JSON object');
+    expect(() => parseJsonObjectInput('{bad json}', 'Metadata')).toThrow('Metadata must be valid JSON');
+  });
+});
