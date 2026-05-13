@@ -1,4 +1,5 @@
 import type { IExecuteFunctions } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 import {
   AlephantManagement,
   buildManagementRequest,
@@ -361,5 +362,92 @@ describe('Alephant Management node', () => {
       }),
     );
     expect(ctx.getNodeParameter).toHaveBeenCalledWith('body', 0, {});
+  });
+
+  it('wraps invalid execution input in NodeOperationError with item index', async () => {
+    const node = new AlephantManagement();
+    const ctx = {
+      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+      getCredentials: jest.fn().mockResolvedValue({
+        pat: 'pat_test',
+        workspaceId: 'workspace-id',
+        saasBaseUrl: 'https://saas.example/',
+        analyticsBaseUrl: 'https://analytics.example/',
+      }),
+      getNode: jest.fn().mockReturnValue({
+        name: 'Alephant Management',
+        type: 'alephantManagement',
+        typeVersion: 1,
+        position: [0, 0],
+        parameters: {},
+      }),
+      getNodeParameter: jest.fn((name: string) => {
+        const values: Record<string, unknown> = {
+          resource: 'workspaceUsage',
+          workspaceUsageOperation: 'history',
+          dateFrom: '',
+          dateTo: '',
+          agentId: 'agent-id',
+          memberId: 'member-id',
+          usageDepartmentId: '',
+        };
+
+        return values[name];
+      }),
+      helpers: { httpRequest: jest.fn() },
+    } as unknown as IExecuteFunctions;
+
+    const error = await node.execute.call(ctx).catch((executionError: unknown) => executionError);
+
+    expect(error).toBeInstanceOf(NodeOperationError);
+    expect(error).toMatchObject({
+      message: 'Choose only one analytics scope filter',
+      context: { itemIndex: 0 },
+    });
+    expect(ctx.helpers.httpRequest).not.toHaveBeenCalled();
+  });
+
+  it('does not request or parse unused body for non-create operations', async () => {
+    const httpRequest = jest.fn().mockResolvedValue({ agents: [] });
+    const node = new AlephantManagement();
+    const ctx = {
+      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+      getCredentials: jest.fn().mockResolvedValue({
+        pat: 'pat_test',
+        workspaceId: 'workspace-id',
+        saasBaseUrl: 'https://saas.example/',
+        analyticsBaseUrl: 'https://analytics.example/',
+      }),
+      getNodeParameter: jest.fn((name: string) => {
+        if (name === 'body') {
+          throw new Error('Body should not be requested');
+        }
+
+        const values: Record<string, unknown> = {
+          resource: 'agent',
+          agentOperation: 'list',
+          page: 1,
+          pageSize: 25,
+          status: '',
+          departmentId: '',
+          environment: '',
+          search: '',
+        };
+
+        return values[name];
+      }),
+      helpers: { httpRequest },
+    } as unknown as IExecuteFunctions;
+
+    await expect(node.execute.call(ctx)).resolves.toEqual([
+      [{ json: { agents: [] }, pairedItem: { item: 0 } }],
+    ]);
+    expect(ctx.getNodeParameter).not.toHaveBeenCalledWith('body', expect.any(Number), {});
+    expect(httpRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        body: undefined,
+      }),
+    );
   });
 });
