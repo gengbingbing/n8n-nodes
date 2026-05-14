@@ -11,9 +11,6 @@
 #     Workflow name: publish.yml
 #     Environment: leave blank
 #
-# Token fallback:
-#   Add a granular npm automation token as the GitHub Actions secret NPM_TOKEN.
-
 name: Publish
 
 on:
@@ -38,9 +35,16 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
-          cache: npm
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Show tool versions
+        run: |
+          node --version
+          npm --version
 
       - name: Install dependencies
         run: npm ci
@@ -64,12 +68,5 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publish with provenance
-        run: |
-          if [ -n "$NPM_TOKEN" ]; then
-            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
-          fi
-
-          npm publish --access public --provenance
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish
+        run: npm publish --access public
