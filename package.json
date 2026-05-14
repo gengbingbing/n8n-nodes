@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/gengbingbing/n8n-nodes.git"
+    "url": "git+https://github.com/gengbingbing/n8n-nodes.git"
   },
   "keywords": [
     "n8n-community-node-package",
