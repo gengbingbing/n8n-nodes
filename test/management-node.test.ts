@@ -26,7 +26,7 @@ describe('Alephant Management node', () => {
       }),
     ).toEqual({
       method: 'GET',
-      host: 'analytics',
+      host: 'saas',
       path: '/api/v1/analytics/usage',
       qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11' },
     });
@@ -41,7 +41,7 @@ describe('Alephant Management node', () => {
       }),
     ).toEqual({
       method: 'GET',
-      host: 'analytics',
+      host: 'saas',
       path: '/api/v1/analytics/usage',
       qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11', agentId: 'agent-id' },
     });
@@ -149,7 +149,7 @@ describe('Alephant Management node', () => {
       {},
       {
         method: 'GET',
-        host: 'analytics',
+        host: 'saas',
         path: '/api/v1/analytics/overview',
       },
     ],
@@ -159,7 +159,7 @@ describe('Alephant Management node', () => {
       { dateFrom: '2026-05-01', dateTo: '2026-05-11' },
       {
         method: 'GET',
-        host: 'analytics',
+        host: 'saas',
         path: '/api/v1/analytics/models',
         qs: { dateFrom: '2026-05-01', dateTo: '2026-05-11' },
       },
@@ -193,7 +193,7 @@ describe('Alephant Management node', () => {
       }),
     ).toEqual({
       method: 'GET',
-      host: 'analytics',
+      host: 'saas',
       path: '/api/v1/analytics/models',
     });
   });
@@ -315,7 +315,7 @@ describe('Alephant Management node', () => {
     });
     expect(httpRequest).toHaveBeenNthCalledWith(2, {
       method: 'GET',
-      url: 'https://analytics.example/api/v1/analytics/overview',
+      url: 'https://saas.example/api/v1/analytics/overview',
       json: true,
       headers: {
         Authorization: 'Bearer pat_test',
@@ -362,6 +362,94 @@ describe('Alephant Management node', () => {
       }),
     );
     expect(ctx.getNodeParameter).toHaveBeenCalledWith('body', 0, {});
+  });
+
+  it('executes imported models workflows when the hidden operation parameter is absent', async () => {
+    const httpRequest = jest.fn().mockResolvedValue({ data: [] });
+    const node = new AlephantManagement();
+    const ctx = {
+      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+      getCredentials: jest.fn().mockResolvedValue({
+        pat: 'pat_test',
+        workspaceId: 'workspace-id',
+        saasBaseUrl: 'https://saas.example/',
+        analyticsBaseUrl: 'https://analytics.example/',
+      }),
+      getNode: jest.fn().mockReturnValue({
+        name: 'Alephant Management',
+        type: 'alephantManagement',
+        typeVersion: 1,
+        position: [0, 0],
+        parameters: {},
+      }),
+      getNodeParameter: jest.fn((...args: [string, number, unknown?]) => {
+        const [name, , fallback] = args;
+        const values: Record<string, unknown> = {
+          resource: 'models',
+        };
+
+        if (name in values) return values[name];
+        if (args.length >= 3 && fallback !== undefined) return fallback;
+        throw new Error('Could not get parameter');
+      }),
+      helpers: { httpRequest },
+    } as unknown as IExecuteFunctions;
+
+    await expect(node.execute.call(ctx)).resolves.toEqual([
+      [{ json: { data: [] }, pairedItem: { item: 0 } }],
+    ]);
+
+    expect(httpRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: 'https://saas.example/api/v1/models',
+      }),
+    );
+  });
+
+  it('executes imported virtual key list workflows when optional query parameters are absent', async () => {
+    const httpRequest = jest.fn().mockResolvedValue({ data: [] });
+    const node = new AlephantManagement();
+    const ctx = {
+      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+      getCredentials: jest.fn().mockResolvedValue({
+        pat: 'pat_test',
+        workspaceId: 'workspace-id',
+        saasBaseUrl: 'https://saas.example/',
+        analyticsBaseUrl: 'https://analytics.example/',
+      }),
+      getNode: jest.fn().mockReturnValue({
+        name: 'Alephant Management',
+        type: 'alephantManagement',
+        typeVersion: 1,
+        position: [0, 0],
+        parameters: {},
+      }),
+      getNodeParameter: jest.fn((...args: [string, number, unknown?]) => {
+        const [name, , fallback] = args;
+        const values: Record<string, unknown> = {
+          resource: 'virtualKey',
+          virtualKeyOperation: 'list',
+        };
+
+        if (name in values) return values[name];
+        if (args.length >= 3 && fallback !== undefined) return fallback;
+        throw new Error('Could not get parameter');
+      }),
+      helpers: { httpRequest },
+    } as unknown as IExecuteFunctions;
+
+    await expect(node.execute.call(ctx)).resolves.toEqual([
+      [{ json: { data: [] }, pairedItem: { item: 0 } }],
+    ]);
+
+    expect(httpRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: 'https://saas.example/api/v1/virtual-keys',
+        qs: { page: 1, pageSize: 50 },
+      }),
+    );
   });
 
   it('wraps invalid execution input in NodeOperationError with item index', async () => {

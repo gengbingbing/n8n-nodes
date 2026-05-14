@@ -1,0 +1,191 @@
+{
+  "name": "Alephant AI Request Cost Tracking",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e7efb1ec-58a1-43b3-9ae5-19d25e5108e1",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        120,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5e550f0b-89a7-4d3f-9e0a-659d2cabd96d",
+              "name": "prompt",
+              "value": "请用中文用三句话介绍 Alephant，并说明它适合解决什么业务问题。",
+              "type": "string"
+            },
+            {
+              "id": "fc4b2016-8d09-41c0-8ba2-bbe2f37bb2cd",
+              "name": "model",
+              "value": "gpt-4o-mini",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b8460284-cfa4-4805-977b-7c119a4e8efe",
+      "name": "Build AI Request",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        360,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "chatCompletion",
+        "model": "={{$json.model}}",
+        "inputMode": "prompt",
+        "prompt": "={{$json.prompt}}",
+        "responseFormat": "text",
+        "metadata": "{}",
+        "additionalOptions": "{}"
+      },
+      "id": "5df84560-f190-4e76-9197-f067824f81ca",
+      "name": "Alephant AI - Chat Completion",
+      "type": "CUSTOM.alephantAi",
+      "typeVersion": 1,
+      "position": [
+        620,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "8f12a8d1-75e3-401d-b6bc-93aa1442f6c7",
+      "name": "Wait for Request Log",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        260
+      ],
+      "webhookId": "7b1af75d-6833-40bc-842a-78946a053c2a"
+    },
+    {
+      "parameters": {
+        "operation": "requestLogDetail",
+        "requestLogId": "={{$json.requestLogId || $json.requestId}}",
+        "workspaceId": "={{$json.workspaceId || \"\"}}"
+      },
+      "id": "53ab1e42-b46f-46fe-8f6f-d305c19d2169",
+      "name": "Alephant Usage - Request Log Detail",
+      "type": "CUSTOM.alephantUsage",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $items('Build AI Request')[0]?.json ?? {};\nconst ai = $items('Alephant AI - Chat Completion')[0]?.json ?? {};\nconst log = $input.first().json ?? {};\n\nconst firstDefined = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');\nconst nested = (...paths) => {\n  for (const path of paths) {\n    const value = path.split('.').reduce((current, key) => current?.[key], log);\n    if (value !== undefined && value !== null && value !== '') return value;\n  }\n  return undefined;\n};\n\nconst cost = firstDefined(\n  nested('cost'),\n  nested('totalCost'),\n  nested('total_cost'),\n  nested('amount'),\n  nested('data.cost'),\n  nested('data.totalCost'),\n  nested('data.total_cost'),\n  nested('billing.cost'),\n  nested('billing.totalCost'),\n);\n\nconst currency = firstDefined(\n  nested('currency'),\n  nested('data.currency'),\n  nested('billing.currency'),\n  'USD',\n);\n\nreturn [\n  {\n    json: {\n      requestLogId: ai.requestLogId || ai.requestId,\n      model: ai.model || request.model,\n      prompt: request.prompt,\n      responseText: ai.text,\n      tokenUsageFromAiResponse: ai.usage,\n      cost,\n      currency,\n      requestLog: log,\n    },\n  },\n];"
+      },
+      "id": "ee98c7a7-24c4-4d8d-9863-bf02400f6ca4",
+      "name": "Summarize Cost",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Before running:\n\n1. Select the same Alephant Virtual Key credential on both Alephant nodes.\n2. The AI node sends `x-request-id` and outputs it as `requestLogId`.\n3. The Request Log Detail node uses `workspaceId` from input or credentials. If missing, it automatically calls Scope to resolve it.\n\nThen it waits 3 seconds, queries the matching request log, and summarizes cost.",
+        "height": 260,
+        "width": 460,
+        "color": 4
+      },
+      "id": "6dc0b972-2d74-4565-b678-0990a84fa228",
+      "name": "Setup Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        360,
+        500
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Build AI Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Request": {
+      "main": [
+        [
+          {
+            "node": "Alephant AI - Chat Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alephant AI - Chat Completion": {
+      "main": [
+        [
+          {
+            "node": "Wait for Request Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Request Log": {
+      "main": [
+        [
+          {
+            "node": "Alephant Usage - Request Log Detail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alephant Usage - Request Log Detail": {
+      "main": [
+        [
+          {
+            "node": "Summarize Cost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c70f1651-a89c-4e7e-95bb-657454033b50",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

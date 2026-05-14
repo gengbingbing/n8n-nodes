@@ -12,17 +12,23 @@ describe('credential helpers', () => {
     const resolved = resolveVirtualKeyCredentials({ virtualKey: 'vk-test' });
     expect(resolved.virtualKey).toBe('vk-test');
     expect(resolved.gatewayBaseUrl).toBe(DEFAULT_GATEWAY_BASE_URL);
+    expect(resolved.saasBaseUrl).toBe(DEFAULT_SAAS_BASE_URL);
     expect(resolved.analyticsBaseUrl).toBe(DEFAULT_ANALYTICS_BASE_URL);
+    expect(resolved.workspaceId).toBe('');
   });
 
   it('allows virtual key base URL overrides', () => {
     const resolved = resolveVirtualKeyCredentials({
       virtualKey: 'vk-test',
       gatewayBaseUrl: 'http://localhost:8080/v1/',
+      saasBaseUrl: 'http://localhost:3000/',
       analyticsBaseUrl: 'http://localhost:3001/',
+      workspaceId: 'workspace-id',
     });
     expect(resolved.gatewayBaseUrl).toBe('http://localhost:8080/v1');
+    expect(resolved.saasBaseUrl).toBe('http://localhost:3000');
     expect(resolved.analyticsBaseUrl).toBe('http://localhost:3001');
+    expect(resolved.workspaceId).toBe('workspace-id');
   });
 
   it('uses default SaaS and analytics base URLs for manager credentials', () => {
@@ -48,7 +54,9 @@ describe('credential metadata', () => {
     const credential = new AlephantVirtualKeyApi();
     const virtualKey = credential.properties.find((property) => property.name === 'virtualKey');
     const gatewayBaseUrl = credential.properties.find((property) => property.name === 'gatewayBaseUrl');
+    const saasBaseUrl = credential.properties.find((property) => property.name === 'saasBaseUrl');
     const analyticsBaseUrl = credential.properties.find((property) => property.name === 'analyticsBaseUrl');
+    const workspaceId = credential.properties.find((property) => property.name === 'workspaceId');
 
     expect(virtualKey).toMatchObject({
       required: true,
@@ -58,9 +66,17 @@ describe('credential metadata', () => {
       required: false,
       default: DEFAULT_GATEWAY_BASE_URL,
     });
+    expect(saasBaseUrl).toMatchObject({
+      required: false,
+      default: DEFAULT_SAAS_BASE_URL,
+    });
     expect(analyticsBaseUrl).toMatchObject({
       required: false,
       default: DEFAULT_ANALYTICS_BASE_URL,
+    });
+    expect(workspaceId).toMatchObject({
+      required: false,
+      default: '',
     });
   });
 

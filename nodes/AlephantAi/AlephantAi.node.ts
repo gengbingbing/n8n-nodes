@@ -5,6 +5,7 @@ import type {
   INodeType,
   INodeTypeDescription,
 } from 'n8n-workflow';
+import { randomUUID } from 'crypto';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { ENDPOINTS } from '../../shared/constants';
 import { resolveVirtualKeyCredentials } from '../../shared/credentials';
@@ -49,9 +50,10 @@ export function buildChatCompletionBody(input: ChatCompletionInput): IDataObject
     input.inputMode === 'messages'
       ? input.messages || []
       : [{ role: 'user', content: input.prompt || '' }];
+  const additionalOptions = filterAdditionalOptions(input.additionalOptions || {});
 
   const body: IDataObject = {
-    ...filterAdditionalOptions(input.additionalOptions || {}),
+    ...additionalOptions,
     model: input.model,
     messages,
   };
@@ -62,7 +64,7 @@ export function buildChatCompletionBody(input: ChatCompletionInput): IDataObject
   if (typeof input.maxTokens === 'number') {
     body.max_tokens = input.maxTokens;
   }
-  if (hasObjectKeys(input.metadata)) {
+  if (hasObjectKeys(input.metadata) && additionalOptions.store === true) {
     body.metadata = input.metadata;
   }
   if (input.responseFormat && input.responseFormat !== 'text') {
@@ -213,8 +215,10 @@ export class AlephantAi implements INodeType {
           inputMode,
           prompt: this.getNodeParameter('prompt', itemIndex, '') as string,
           messages,
-          temperature: this.getNodeParameter('temperature', itemIndex) as number | undefined,
-          maxTokens: this.getNodeParameter('maxTokens', itemIndex) as number | undefined,
+          temperature:
+            (this.getNodeParameter('temperature', itemIndex, null) as number | null) ?? undefined,
+          maxTokens:
+            (this.getNodeParameter('maxTokens', itemIndex, null) as number | null) ?? undefined,
           responseFormat: this.getNodeParameter('responseFormat', itemIndex, 'text') as string,
           metadata: parseJsonObjectInput(this.getNodeParameter('metadata', itemIndex, {}), 'Metadata'),
           additionalOptions: parseJsonObjectInput(
@@ -236,17 +240,29 @@ export class AlephantAi implements INodeType {
         });
       }
 
+      const requestLogId = randomUUID();
       const raw = await alephantRequest<Record<string, unknown>>(this, {
         method: 'POST',
         baseUrl: credentials.gatewayBaseUrl,
         path: ENDPOINTS.chatCompletions,
         token: credentials.virtualKey,
+        headers: { 'x-request-id': requestLogId },
         body,
         itemIndex,
       });
 
+      const inputWorkspaceId = items[itemIndex]?.json?.workspaceId;
+      const workspaceId =
+        typeof inputWorkspaceId === 'string' && inputWorkspaceId.trim() !== ''
+          ? inputWorkspaceId.trim()
+          : undefined;
+      const normalized = normalizeChatCompletion(raw, requestLogId) as unknown as IDataObject;
+      if (workspaceId) {
+        normalized.workspaceId = workspaceId;
+      }
+
       returnData.push({
-        json: normalizeChatCompletion(raw) as unknown as IDataObject,
+        json: normalized,
         pairedItem: { item: itemIndex },
       });
     }

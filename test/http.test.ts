@@ -97,6 +97,28 @@ describe('shared HTTP helpers', () => {
     expect(httpRequest.mock.calls[0][0].headers).not.toHaveProperty('X-Workspace-Id');
   });
 
+  it('retries transient network failures that do not receive a response', async () => {
+    const transientError = {
+      code: 'ECONNRESET',
+      message: 'Client network socket disconnected before secure TLS connection was established',
+      request: {},
+    };
+    const httpRequest = jest.fn().mockRejectedValueOnce(transientError).mockResolvedValue({ ok: true });
+    const ctx = createExecuteContext(httpRequest);
+
+    await expect(
+      alephantRequest(ctx, {
+        method: 'POST',
+        baseUrl: DEFAULT_GATEWAY_BASE_URL,
+        path: ENDPOINTS.chatCompletions,
+        token: 'vk_test',
+        body: { model: 'gpt-4o-mini' },
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    expect(httpRequest).toHaveBeenCalledTimes(2);
+  });
+
   it('wraps request failures as NodeApiError while preserving response details', async () => {
     const originalError = {
       message: 'Request failed with status code 429',

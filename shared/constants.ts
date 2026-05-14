@@ -10,6 +10,7 @@ export const ENDPOINTS = {
   cockpitDailyCosts: '/api/v1/cockpit/daily-costs',
   cockpitCostByModel: '/api/v1/cockpit/cost-by-model',
   cockpitRecentRequests: '/api/v1/cockpit/recent-requests',
+  analyticsRequestLogs: '/v1/analytics/request-logs',
   agents: '/api/v1/agents',
   virtualKeys: '/api/v1/virtual-keys',
   models: '/api/v1/models',

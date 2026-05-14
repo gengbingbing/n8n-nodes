@@ -2,7 +2,9 @@ export type InputMode = 'prompt' | 'messages';
 
 export interface AlephantVirtualKeyCredentials {
   virtualKey: string;
+  workspaceId?: string;
   gatewayBaseUrl?: string;
+  saasBaseUrl?: string;
   analyticsBaseUrl?: string;
 }
 
@@ -24,5 +26,6 @@ export interface NormalizedChatCompletion {
   usage: Record<string, unknown>;
   model: string | undefined;
   requestId: string | undefined;
+  requestLogId: string | undefined;
   finishReason: string | undefined;
 }

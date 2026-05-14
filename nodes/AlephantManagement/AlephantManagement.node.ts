@@ -22,6 +22,18 @@ export type ManagementOperation =
   | 'history'
   | 'costByModel';
 
+const DEFAULT_OPERATION_BY_RESOURCE: Record<ManagementResource, ManagementOperation> = {
+  agent: 'list',
+  virtualKey: 'list',
+  models: 'list',
+  workspaceUsage: 'summary',
+};
+
+const DEFAULT_AGENT_PAGE = 1;
+const DEFAULT_AGENT_PAGE_SIZE = 25;
+const DEFAULT_VIRTUAL_KEY_PAGE = 1;
+const DEFAULT_VIRTUAL_KEY_PAGE_SIZE = 50;
+
 export interface ManagementRequest {
   method: IHttpRequestMethods;
   host: 'saas' | 'analytics';
@@ -178,7 +190,7 @@ export function buildManagementRequest(
   if (resource === 'workspaceUsage' && operation === 'summary') {
     return {
       method: 'GET',
-      host: 'analytics',
+      host: 'saas',
       path: ENDPOINTS.analyticsOverview,
     };
   }
@@ -188,7 +200,7 @@ export function buildManagementRequest(
     return withQs(
       {
         method: 'GET',
-        host: 'analytics',
+        host: 'saas',
         path: ENDPOINTS.analyticsUsage,
       },
       {
@@ -205,7 +217,7 @@ export function buildManagementRequest(
     return withQs(
       {
         method: 'GET',
-        host: 'analytics',
+        host: 'saas',
         path: ENDPOINTS.analyticsModels,
       },
       {
@@ -226,8 +238,8 @@ function getManagementRequestParams(
 ): ManagementRequestParams {
   if (resource === 'agent' && operation === 'list') {
     return {
-      page: getQueryParameter(ctx, 'page', itemIndex, undefined),
-      pageSize: getQueryParameter(ctx, 'pageSize', itemIndex, undefined),
+      page: getQueryParameter(ctx, 'page', itemIndex, DEFAULT_AGENT_PAGE),
+      pageSize: getQueryParameter(ctx, 'pageSize', itemIndex, DEFAULT_AGENT_PAGE_SIZE),
       status: getQueryParameter(ctx, 'status', itemIndex, ''),
       departmentId: getQueryParameter(ctx, 'departmentId', itemIndex, ''),
       environment: getQueryParameter(ctx, 'environment', itemIndex, ''),
@@ -243,8 +255,8 @@ function getManagementRequestParams(
 
   if (resource === 'virtualKey' && operation === 'list') {
     return {
-      page: getQueryParameter(ctx, 'page', itemIndex, undefined),
-      pageSize: getQueryParameter(ctx, 'pageSize', itemIndex, undefined),
+      page: getQueryParameter(ctx, 'page', itemIndex, DEFAULT_VIRTUAL_KEY_PAGE),
+      pageSize: getQueryParameter(ctx, 'pageSize', itemIndex, DEFAULT_VIRTUAL_KEY_PAGE_SIZE),
       status: getQueryParameter(ctx, 'status', itemIndex, ''),
       entityType: getQueryParameter(ctx, 'entityType', itemIndex, ''),
     };
@@ -368,28 +380,28 @@ export class AlephantManagement implements INodeType {
         displayName: 'Page',
         name: 'page',
         type: 'number',
-        default: undefined,
+        default: DEFAULT_AGENT_PAGE,
         displayOptions: { show: { resource: ['agent'], agentOperation: ['list'] } },
       },
       {
         displayName: 'Page',
         name: 'page',
         type: 'number',
-        default: undefined,
+        default: DEFAULT_VIRTUAL_KEY_PAGE,
         displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['list'] } },
       },
       {
         displayName: 'Page Size',
         name: 'pageSize',
         type: 'number',
-        default: undefined,
+        default: DEFAULT_AGENT_PAGE_SIZE,
         displayOptions: { show: { resource: ['agent'], agentOperation: ['list'] } },
       },
       {
         displayName: 'Page Size',
         name: 'pageSize',
         type: 'number',
-        default: undefined,
+        default: DEFAULT_VIRTUAL_KEY_PAGE_SIZE,
         displayOptions: { show: { resource: ['virtualKey'], virtualKeyOperation: ['list'] } },
       },
       {
@@ -512,10 +524,11 @@ export class AlephantManagement implements INodeType {
     const returnData: INodeExecutionData[] = [];
 
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-      const resource = this.getNodeParameter('resource', itemIndex) as ManagementResource;
+      const resource = this.getNodeParameter('resource', itemIndex, 'agent') as ManagementResource;
       const operation = this.getNodeParameter(
         `${resource}Operation`,
         itemIndex,
+        DEFAULT_OPERATION_BY_RESOURCE[resource],
       ) as ManagementOperation;
       let request: ManagementRequest;
 

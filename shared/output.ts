@@ -15,6 +15,7 @@ export function normalizeChatCompletion(raw: any, requestId?: string): Normalize
     usage: raw?.usage ?? {},
     model: raw?.model,
     requestId,
+    requestLogId: requestId,
     finishReason: firstChoice?.finish_reason ?? firstChoice?.finishReason,
   };
 }

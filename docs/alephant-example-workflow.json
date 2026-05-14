@@ -1,0 +1,112 @@
+{
+  "name": "Alephant AI + Usage + Management Examples",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "9f8f6d91-8794-4d30-a585-9e8f27db703d",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        120,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "chatCompletion",
+        "model": "gpt-4o-mini",
+        "inputMode": "prompt",
+        "prompt": "Write a concise one-paragraph summary of what Alephant does.",
+        "responseFormat": "text",
+        "metadata": "{}",
+        "additionalOptions": "{}"
+      },
+      "id": "5df84560-f190-4e76-9197-f067824f81ca",
+      "name": "Alephant AI - Chat Completion",
+      "type": "CUSTOM.alephantAi",
+      "typeVersion": 1,
+      "position": [
+        440,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "usageSummary",
+        "period": "7d"
+      },
+      "id": "f75b67bc-b2e0-4bc8-b7f3-2c776c8f4b35",
+      "name": "Alephant Usage - 7 Day Summary",
+      "type": "CUSTOM.alephantUsage",
+      "typeVersion": 1,
+      "position": [
+        440,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "models",
+        "modelsOperation": "list"
+      },
+      "id": "1f56b904-e58d-4e25-9263-b663f42f898d",
+      "name": "Alephant Management - List Models",
+      "type": "CUSTOM.alephantManagement",
+      "typeVersion": 1,
+      "position": [
+        440,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "content": "After importing, open each Alephant node and choose credentials:\n\n- Alephant AI and Alephant Usage use `Alephant Virtual Key`.\n- Alephant Management uses `Alephant Manager`.\n\nThen click `Test workflow` or execute one node at a time.",
+        "height": 220,
+        "width": 360,
+        "color": 4
+      },
+      "id": "cc97d25c-cd6d-4bbe-b849-75bfa14320db",
+      "name": "Setup note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        220
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Alephant AI - Chat Completion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alephant Usage - 7 Day Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alephant Management - List Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "df1246f2-5b0b-4cb2-a391-0d96b854c2b5",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
