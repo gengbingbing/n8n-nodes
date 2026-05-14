@@ -6,8 +6,8 @@
 # One-time npm setup, recommended:
 #   npmjs.com package settings > Publish access > Trusted Publishers
 #   Add GitHub Actions with:
-#     Repository owner: alephant-ai
-#     Repository name: n8n-nodes-alephant
+#     Repository owner: gengbingbing
+#     Repository name: n8n-nodes
 #     Workflow name: publish.yml
 #     Environment: leave blank
 #
@@ -38,7 +38,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
 
